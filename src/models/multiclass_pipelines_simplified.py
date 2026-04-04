@@ -42,6 +42,7 @@ from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassif
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
 from sklearn.model_selection import StratifiedKFold
+from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -116,8 +117,9 @@ def build_hgb() -> HistGradientBoostingClassifier:
 
 
 def build_lr() -> Pipeline:
-    """Logistic Regression with StandardScaler — linear sanity baseline."""
+    """Logistic Regression with imputation + StandardScaler — linear sanity baseline."""
     return Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
         ("scaler", StandardScaler()),
         ("clf", LogisticRegression(
             C=1.0,

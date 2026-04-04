@@ -82,7 +82,7 @@ def build_voting_s2(y_volInv: np.ndarray) -> VotingClassifier:
     )
     cat_s2 = CatBoostClassifier(
         iterations=600, depth=6, learning_rate=0.06,
-        class_weights={0: 1, 1: spw}, verbose=0, random_seed=42,
+        auto_class_weights="Balanced", verbose=0, random_seed=42,
     )
     lr_s2 = SKPipeline([
         ("imputer", SimpleImputer(strategy="median")),

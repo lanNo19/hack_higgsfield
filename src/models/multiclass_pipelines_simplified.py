@@ -333,3 +333,140 @@ def run_simplified_suite(
     df.to_csv(_ARTIFACTS / "results_simplified.csv", index=False)
     log.info("Results saved → models/artifacts/results_simplified.csv")
     return df
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Ensemble: blend saved OOF probability matrices
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _load_oof(pipeline_name: str) -> np.ndarray:
+    path = _ARTIFACTS / f"oof_mc_{pipeline_name}.npy"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"OOF array not found: {path}\n"
+            f"Run the '{pipeline_name}' pipeline first."
+        )
+    return np.load(path)
+
+
+def _blend(oofs: list[np.ndarray], weights: list[float]) -> np.ndarray:
+    """Weighted average of (n, 3) OOF arrays. Weights must sum to 1."""
+    return sum(w * oof for w, oof in zip(weights, oofs))
+
+
+def _search_weights(
+    oofs: list[np.ndarray],
+    y_3: np.ndarray,
+    step: float = 0.05,
+) -> tuple[list[float], float]:
+    """Coarse grid search over convex weight combinations maximising macro F1.
+
+    For n=3 models with step=0.05 there are ~171 candidate triplets — fast
+    because we only evaluate argmax on blended probability matrices, no refit.
+    """
+    n = len(oofs)
+    if n == 2:
+        candidates = [
+            [r, 1.0 - r]
+            for r in np.arange(step, 1.0, step)
+        ]
+    elif n == 3:
+        candidates = []
+        for w1 in np.arange(step, 1.0, step):
+            for w2 in np.arange(step, 1.0 - w1 + 1e-9, step):
+                w3 = round(1.0 - w1 - w2, 10)
+                if w3 >= step - 1e-9:
+                    candidates.append([round(w1, 10), round(w2, 10), round(w3, 10)])
+    else:
+        # For >3 models fall back to equal weights
+        log.warning("Weight search only supported for 2–3 models; using equal weights.")
+        return [1.0 / n] * n, f1_score(
+            y_3, np.argmax(_blend(oofs, [1.0 / n] * n), axis=1),
+            average="macro", zero_division=0,
+        )
+
+    best_weights, best_f1 = None, -1.0
+    for weights in candidates:
+        blended = _blend(oofs, weights)
+        score   = f1_score(
+            y_3, np.argmax(blended, axis=1),
+            average="macro", zero_division=0,
+        )
+        if score > best_f1:
+            best_f1, best_weights = score, weights
+
+    return best_weights, best_f1
+
+
+def run_ensemble(
+    pipeline_names: list[str] | None = None,
+    search_weights: bool = True,
+) -> dict:
+    """Blend saved OOF arrays for the given pipelines and evaluate.
+
+    Loads `oof_mc_{name}.npy` for each name — pipelines must have been run first.
+    If search_weights=True, does a coarse grid search (step=0.05) for the weight
+    triplet that maximises OOF macro F1, then also reports equal-weight results.
+
+    Args:
+        pipeline_names: List of pipeline names to blend.
+                        Default: ["K_top75", "Ks_top75", "HGB_top75"]
+        search_weights: Run grid search for optimal weights (recommended).
+
+    Returns:
+        Metrics dict (same schema as evaluate_multiclass).
+    """
+    if pipeline_names is None:
+        pipeline_names = ["K_top75", "Ks_top75", "HGB_top75"]
+
+    log.info("=== Ensemble: %s ===", " + ".join(pipeline_names))
+    oofs = [_load_oof(name) for name in pipeline_names]
+
+    # Need y_3 for evaluation and weight search
+    X, y = load_feature_matrix()
+    X_train, _, _, y_train, _, _ = make_splits(X, y)
+    y_3 = y_train.values
+
+    n = len(pipeline_names)
+    ensemble_tag = "+".join(pipeline_names)
+
+    results = {}
+
+    # ── Equal weights ──────────────────────────────────────────────────────────
+    eq_weights  = [1.0 / n] * n
+    oof_equal   = _blend(oofs, eq_weights)
+    name_equal  = f"Ens_equal_{'_'.join(pipeline_names)}"
+    result_equal = evaluate_multiclass(name_equal, y_3, oof_equal)
+    log.info(
+        "Equal weights %s — macro F1: %.4f  weighted F1: %.4f",
+        eq_weights, result_equal["macro_f1_3class"], result_equal["weighted_f1_3class"],
+    )
+    results["equal"] = result_equal
+
+    # ── Optimal weights ────────────────────────────────────────────────────────
+    if search_weights and n in (2, 3):
+        log.info("Searching optimal weights (step=0.05)...")
+        best_w, best_f1 = _search_weights(oofs, y_3, step=0.05)
+        oof_opt  = _blend(oofs, best_w)
+        name_opt = f"Ens_opt_{'_'.join(pipeline_names)}"
+        result_opt = evaluate_multiclass(name_opt, y_3, oof_opt)
+        log.info(
+            "Optimal weights %s — macro F1: %.4f  weighted F1: %.4f",
+            [round(w, 2) for w in best_w],
+            result_opt["macro_f1_3class"],
+            result_opt["weighted_f1_3class"],
+        )
+        result_opt["optimal_weights"] = dict(zip(pipeline_names, [round(w, 2) for w in best_w]))
+        results["optimal"] = result_opt
+
+        # Save optimal OOF for potential further stacking
+        _ARTIFACTS.mkdir(parents=True, exist_ok=True)
+        np.save(_ARTIFACTS / f"oof_mc_{name_opt}.npy", oof_opt)
+
+    # ── Save results ───────────────────────────────────────────────────────────
+    _ARTIFACTS.mkdir(parents=True, exist_ok=True)
+    for variant, res in results.items():
+        with open(_ARTIFACTS / f"results_Ens_{variant}.json", "w") as fh:
+            json.dump(res, fh, indent=2)
+
+    return results

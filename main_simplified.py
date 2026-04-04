@@ -3,6 +3,7 @@ Entry point for simplified + feature-parametric multiclass pipelines.
 
 Step 1 (auto or manual): compute SHAP feature ranking
 Step 2: run model × feature-subset combinations
+Step 3 (optional): blend saved OOF arrays into an ensemble
 
 Models available:
   K   — LightGBM multiclass (existing, now parametric)
@@ -11,7 +12,7 @@ Models available:
   Ks  — LightGBM simplified (num_leaves=31, reg_lambda=3.0)
   RF  — RandomForest
   HGB — HistGradientBoosting (sklearn)
-  LR  — LogisticRegression + StandardScaler
+  LR  — LogisticRegression + imputer + StandardScaler
 
 Feature subsets:
   all     — all ~139 S1_FEATURES in the parquet
@@ -33,12 +34,18 @@ Usage:
     # Single combination
     uv run python main_simplified.py --models Ks --features top50
 
+    # Ensemble: blend K_top75 + Ks_top75 + HGB_top75 (pipelines must have been run)
+    uv run python main_simplified.py --ensemble
+
+    # Ensemble with custom pipelines
+    uv run python main_simplified.py --ensemble --ensemble-pipelines K_top75 Ks_top75
+
     # Re-run SHAP ranking even if cached
     uv run python main_simplified.py --rerank
 """
 import argparse
 
-from src.models.multiclass_pipelines_simplified import ALL_MODELS, run_simplified_suite
+from src.models.multiclass_pipelines_simplified import ALL_MODELS, run_ensemble, run_simplified_suite
 from src.models.shap_feature_ranking import compute_shap_ranking, load_feature_lists
 from src.utils.helpers import root_path
 from src.utils.logger import get_logger
@@ -47,6 +54,7 @@ log = get_logger(__name__)
 
 _FEATURE_LISTS_PATH = root_path() / "models" / "artifacts" / "feature_lists.json"
 _VALID_FEATURE_KEYS = ["all", "top100", "top75", "top50", "top25"]
+_DEFAULT_ENSEMBLE   = ["K_top75", "Ks_top75", "HGB_top75"]
 
 
 def main() -> None:
@@ -68,11 +76,38 @@ def main() -> None:
         help="Feature subset(s) to use (default: all subsets)",
     )
     parser.add_argument(
+        "--ensemble",
+        action="store_true",
+        help=f"Blend saved OOF arrays (default: {_DEFAULT_ENSEMBLE}). Skips pipeline training.",
+    )
+    parser.add_argument(
+        "--ensemble-pipelines",
+        nargs="+",
+        default=None,
+        metavar="NAME",
+        help="Override which pipelines to blend (e.g. K_top75 Ks_top50 HGB_top75)",
+    )
+    parser.add_argument(
         "--rerank",
         action="store_true",
         help="Re-run SHAP feature ranking even if feature_lists.json already exists",
     )
     args = parser.parse_args()
+
+    # ── Ensemble-only mode ────────────────────────────────────────────────────
+    if args.ensemble:
+        names = args.ensemble_pipelines or _DEFAULT_ENSEMBLE
+        print(f"\nBlending: {' + '.join(names)}")
+        results = run_ensemble(pipeline_names=names, search_weights=True)
+        for variant, res in results.items():
+            print(f"\n  [{variant}]  macro F1: {res['macro_f1_3class']:.4f}"
+                  f"  weighted F1: {res['weighted_f1_3class']:.4f}"
+                  f"  not_churned: {res['f1_not_churned']:.4f}"
+                  f"  vol: {res['f1_vol_churn']:.4f}"
+                  f"  invol: {res['f1_invol_churn']:.4f}")
+            if "optimal_weights" in res:
+                print(f"           weights: {res['optimal_weights']}")
+        return
 
     # ── Step 1: ensure feature ranking exists ─────────────────────────────────
     if args.rerank or not _FEATURE_LISTS_PATH.exists():
@@ -95,7 +130,6 @@ def main() -> None:
     )
 
     print("\n=== Simplified Pipeline Rankings ===")
-    # Show key columns only for readability
     cols = [c for c in [
         "pipeline", "weighted_f1_3class", "macro_f1_3class", "accuracy_3class",
         "f1_not_churned", "f1_vol_churn", "f1_invol_churn", "pr_auc_macro",

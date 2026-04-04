@@ -220,20 +220,15 @@ def build_generation_features(
     g_slope["week_num"] = ((g_slope["created_at"] - g_slope["sub_start"]).dt.days // 7).clip(lower=0)
     weekly = g_slope.groupby(["user_id", "week_num"]).size().reset_index(name="wcount")
 
-    def _slope(grp: pd.DataFrame) -> float:
-        if len(grp) < 3:
-            return 0.0
-        x = grp["week_num"].values.astype(float)
-        y = grp["wcount"].values.astype(float)
-        if x.max() == x.min():
-            return 0.0
-        return float(stats.linregress(x, y).slope)
-
-    engagement_slope = (
-        weekly.groupby("user_id")
-        .apply(_slope, include_groups=False)
-        .rename("engagement_slope")
-    )
+    # Vectorised OLS slope: β = (n·Σxy − Σx·Σy) / (n·Σx² − (Σx)²)
+    wg = weekly.groupby("user_id")
+    n    = wg["week_num"].count()
+    sx   = wg["week_num"].sum()
+    sy   = wg["wcount"].sum()
+    sxy  = (weekly["week_num"] * weekly["wcount"]).groupby(weekly["user_id"]).sum()
+    sx2  = (weekly["week_num"] ** 2).groupby(weekly["user_id"]).sum()
+    denom = (n * sx2 - sx ** 2).replace(0, np.nan)
+    engagement_slope = ((n * sxy - sx * sy) / denom).fillna(0.0).where(n >= 3, 0.0).rename("engagement_slope")
 
     # 14-day momentum: recent 14d vs prior 14d
     gens_last_14 = g_last14.groupby("user_id").size()

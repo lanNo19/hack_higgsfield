@@ -52,7 +52,7 @@ def build_catboost_s2(y_volInv: np.ndarray, params: dict | None = None) -> CatBo
     pos = (y_volInv == 1).sum()
     default = dict(
         iterations=600, learning_rate=0.06, depth=6, l2_leaf_reg=5.0,
-        class_weights={0: 1.0, 1: neg / max(pos, 1)},
+        class_weights={0: 1.0, 1: float(neg / max(pos, 1))},
         eval_metric="PRAUC", random_seed=42, verbose=0,
         early_stopping_rounds=40,
     )
@@ -74,7 +74,7 @@ def build_lgbm_s2(params: dict | None = None) -> lgb.LGBMClassifier:
 
 def build_voting_s2(y_volInv: np.ndarray) -> VotingClassifier:
     """Soft-voting ensemble Stage 2: XGB + CatBoost + LogReg."""
-    spw = (y_volInv == 0).sum() / max((y_volInv == 1).sum(), 1)
+    spw = float((y_volInv == 0).sum() / max((y_volInv == 1).sum(), 1))
     xgb_s2 = xgb.XGBClassifier(
         n_estimators=700, max_depth=5, learning_rate=0.05,
         scale_pos_weight=spw, eval_metric="aucpr",

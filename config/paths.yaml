@@ -1,0 +1,12 @@
+data:
+  raw:
+    train: data/raw/train
+    test: data/raw/test
+  processed: data/processed
+  interim: data/interim
+
+models:
+  trained: models/trained
+  artifacts: models/artifacts
+
+reports: reports

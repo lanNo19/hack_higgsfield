@@ -1,0 +1,81 @@
+# Observation cutoff dates (one day after last observed event per split)
+observation_dates:
+  train: "2023-11-25"
+  test: "2023-12-09"
+
+# Subscription plan metadata (from research doc)
+plan_info:
+  "Higgsfield Basic":
+    ordinal: 1
+    monthly_credits: 1000
+    monthly_cost_usd: 9.0
+  "Higgsfield Pro":
+    ordinal: 2
+    monthly_credits: 3000
+    monthly_cost_usd: 29.0
+  "Higgsfield Ultimate":
+    ordinal: 3
+    monthly_credits: 7000
+    monthly_cost_usd: 49.0
+  "Higgsfield Creator":
+    ordinal: 4
+    monthly_credits: 20000
+    monthly_cost_usd: 149.0
+  "Free":
+    ordinal: 0
+    monthly_credits: 9000
+    monthly_cost_usd: 0.0
+
+top_countries:
+  - US
+  - IN
+  - DE
+  - JP
+  - GB
+  - FR
+  - KR
+  - BR
+  - TR
+  - IT
+  - CA
+  - AU
+  - UA
+  - ES
+  - VN
+
+generation:
+  business_hours_start: 9
+  business_hours_end: 18
+  recent_window_days: 14
+  activation_window_days: 7
+  long_wait_threshold_secs: 300
+  high_credit_cost_threshold: 30
+
+transaction:
+  retry_window_hours: 24
+  recent_window_days: 30
+  high_value_usd: 100
+
+churn_labels:
+  not_churned: 0
+  vol_churn: 1
+  invol_churn: 2
+
+top_sources:
+  - instagram
+  - youtube
+  - friends
+  - other
+  - tiktok
+  - google
+  - ai-community
+  - chatgpt
+  - twitter
+
+top_generation_types:
+  - image_model_1
+  - image_model_2
+  - image_model_3
+  - image_model_4
+  - video_model_1
+  - video_model_2

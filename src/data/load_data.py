@@ -45,12 +45,17 @@ def _fix_out_of_bounds_dates(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     return df
 
 
-def _load_table(base: Path, prefix: str, table: str) -> pd.DataFrame:
+def _load_table(base: Path, prefix: str, table: str, optional: bool = False) -> pd.DataFrame:
     fname = f"{prefix}{_TABLE_SUFFIX[table]}.csv"
     fpath = base / fname
     date_cols = _DATE_COLS[table]
 
     log.info("Loading %s ...", fname)
+    if not fpath.exists():
+        if optional:
+            log.warning("  Optional table '%s' not found, skipping.", fname)
+            return pd.DataFrame()
+        raise FileNotFoundError(f"Required table not found: {fpath}")
     df = pd.read_csv(fpath, parse_dates=date_cols if date_cols else False, low_memory=False)
 
     if "Unnamed: 0" in df.columns:
@@ -70,4 +75,8 @@ def load_split(split: str) -> dict[str, pd.DataFrame]:
     base = data_path(split)
     prefix = f"{split}_users"
 
-    return {table: _load_table(base, prefix, table) for table in _TABLE_SUFFIX}
+    optional_tables = {"generations"}
+    return {
+        table: _load_table(base, prefix, table, optional=table in optional_tables)
+        for table in _TABLE_SUFFIX
+    }

@@ -206,7 +206,9 @@ def _build_composite_scores(feat: pd.DataFrame) -> pd.DataFrame:
             col = feat[rfm_src].fillna(0)
             if rfm_src == "days_since_last_generation":
                 col = -col  # invert: recent = high score
-            scores[rfm_name] = pd.qcut(col, q=4, labels=[1, 2, 3, 4], duplicates="drop").astype(float)
+            bins = pd.qcut(col, q=4, duplicates="drop", retbins=True)[1]
+            n_bins = len(bins) - 1
+            scores[rfm_name] = pd.qcut(col, q=4, labels=list(range(1, n_bins + 1)), duplicates="drop").astype(float)
 
     scores.index.name = "user_id"
     return scores

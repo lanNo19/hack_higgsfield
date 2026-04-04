@@ -273,9 +273,10 @@ def run_all_mc_pipelines_v2(pipelines: list[str] | None = None) -> pd.DataFrame:
             results.append({"pipeline": name, "error": str(e)})
 
     df = pd.DataFrame(results)
-    sort_col = "macro_f1_joint_thr" if "macro_f1_joint_thr" in df.columns else "macro_f1_3class"
-    if sort_col in df.columns:
-        df = df.sort_values(sort_col, ascending=False)
+    for sort_col in ["weighted_f1_3class", "weighted_f1_joint_thr", "macro_f1_3class"]:
+        if sort_col in df.columns:
+            df = df.sort_values(sort_col, ascending=False)
+            break
 
     _ARTIFACTS.mkdir(parents=True, exist_ok=True)
     df.to_csv(_ARTIFACTS / "results_multiclass_v2.csv", index=False)

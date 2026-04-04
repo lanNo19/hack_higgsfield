@@ -36,10 +36,10 @@ def evaluate_multiclass(
     """
     preds = np.argmax(oof_proba, axis=1)
 
-    acc_3      = accuracy_score(y_3, preds)
-    macro_f1   = f1_score(y_3, preds, average="macro",    zero_division=0)
-    weighted_f1 = f1_score(y_3, preds, average="weighted", zero_division=0)
-    f1_per     = f1_score(y_3, preds, average=None,       zero_division=0)
+    acc_3        = accuracy_score(y_3, preds)
+    weighted_f1  = f1_score(y_3, preds, average="weighted", zero_division=0)
+    macro_f1     = f1_score(y_3, preds, average="macro",    zero_division=0)
+    f1_per       = f1_score(y_3, preds, average=None,       zero_division=0)
 
     # OvR PR-AUC per class and macro average
     y_onehot = np.eye(3)[y_3]
@@ -60,9 +60,9 @@ def evaluate_multiclass(
 
     return {
         "pipeline":            name,
-        "accuracy_3class":     round(acc_3,            4),
-        "macro_f1_3class":     round(macro_f1,         4),
         "weighted_f1_3class":  round(weighted_f1,      4),
+        "macro_f1_3class":     round(macro_f1,         4),
+        "accuracy_3class":     round(acc_3,            4),
         "pr_auc_macro":        round(pr_auc_macro,     4),
         "pr_auc_not_churned":  round(pr_auc_per[0],   4),
         "pr_auc_vol_churn":    round(pr_auc_per[1],   4),
@@ -146,19 +146,17 @@ def evaluate_fixed_cascade(
     )
 
     bin_thr, best_f1_bin = best_f1_threshold(y_binary, oof_s1)
-    preds_bin  = np.where(
-        (oof_s1 >= bin_thr), np.where(oof_s2 >= 0.5, 2, 1), 0
-    )
-    macro_f1_bin = f1_score(y_3, preds_bin, average="macro", zero_division=0)
-    acc_bin      = accuracy_score(y_3, preds_bin)
+    preds_bin         = np.where((oof_s1 >= bin_thr), np.where(oof_s2 >= 0.5, 2, 1), 0)
+    macro_f1_bin      = f1_score(y_3, preds_bin, average="macro",    zero_division=0)
+    weighted_f1_bin   = f1_score(y_3, preds_bin, average="weighted", zero_division=0)
+    acc_bin           = accuracy_score(y_3, preds_bin)
 
     # ── Cascade metrics with jointly optimised thresholds ─────────────────────
     jt1, jt2, macro_f1_joint = joint_threshold_search(y_binary, y_volInv, oof_s1, oof_s2)
-    preds_joint  = np.where(
-        (oof_s1 >= jt1), np.where(oof_s2 >= jt2, 2, 1), 0
-    )
-    acc_joint    = accuracy_score(y_3, preds_joint)
-    f1_per_joint = f1_score(y_3, preds_joint, average=None, zero_division=0)
+    preds_joint       = np.where((oof_s1 >= jt1), np.where(oof_s2 >= jt2, 2, 1), 0)
+    acc_joint         = accuracy_score(y_3, preds_joint)
+    weighted_f1_joint = f1_score(y_3, preds_joint, average="weighted", zero_division=0)
+    f1_per_joint      = f1_score(y_3, preds_joint, average=None,       zero_division=0)
 
     log.info(
         "Pipeline %s — pr_auc_s1: %.4f  pr_auc_s2: %.4f\n"
@@ -176,20 +174,22 @@ def evaluate_fixed_cascade(
 
     return {
         "pipeline":                  name,
-        "pr_auc_s1":                 round(pr_auc_s1,     4),
-        "pr_auc_s2":                 round(pr_auc_s2,     4),
-        "best_f1_s1":                round(best_f1_bin,   4),
-        "binary_thr_s1":             round(bin_thr,       3),
-        # With binary-optimal threshold (equivalent to A–F for comparison)
-        "macro_f1_binary_thr":       round(macro_f1_bin,  4),
-        "accuracy_binary_thr":       round(acc_bin,       4),
-        # With jointly-optimised thresholds
-        "macro_f1_joint_thr":        round(macro_f1_joint, 4),
-        "accuracy_joint_thr":        round(acc_joint,     4),
-        "joint_thr_s1":              round(jt1,           3),
-        "joint_thr_s2":              round(jt2,           3),
+        # Primary metric first
+        "weighted_f1_joint_thr":     round(weighted_f1_joint, 4),
+        "macro_f1_joint_thr":        round(macro_f1_joint,    4),
+        "accuracy_joint_thr":        round(acc_joint,         4),
+        "joint_thr_s1":              round(jt1,               3),
+        "joint_thr_s2":              round(jt2,               3),
         "f1_not_churned_joint":      round(float(f1_per_joint[0]), 4),
         "f1_vol_churn_joint":        round(float(f1_per_joint[1]), 4),
         "f1_invol_churn_joint":      round(float(f1_per_joint[2]), 4),
+        # Cascade with binary-optimal threshold (A–F equivalent, for comparison)
+        "weighted_f1_binary_thr":    round(weighted_f1_bin,   4),
+        "macro_f1_binary_thr":       round(macro_f1_bin,      4),
+        "accuracy_binary_thr":       round(acc_bin,           4),
+        "binary_thr_s1":             round(bin_thr,           3),
+        "pr_auc_s1":                 round(pr_auc_s1,         4),
+        "pr_auc_s2":                 round(pr_auc_s2,         4),
+        "best_f1_s1":                round(best_f1_bin,       4),
         "timestamp":                 datetime.now().isoformat(),
     }

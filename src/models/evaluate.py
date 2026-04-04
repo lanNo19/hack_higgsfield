@@ -47,18 +47,20 @@ def evaluate(
     # y_3: 0=not_churned, 1=vol_churn, 2=invol_churn
     y_3 = np.where(y_binary == 0, 0, np.where(y_volInv == 1, 2, 1))
     preds_s2   = (oof_s2 >= thr_s2).astype(int)
-    preds_3    = np.where(preds_s1 == 0, 0, np.where(preds_s2 == 1, 2, 1))
-    acc_3      = accuracy_score(y_3, preds_3)
-    macro_f1_3 = f1_score(y_3, preds_3, average="macro")
+    preds_3       = np.where(preds_s1 == 0, 0, np.where(preds_s2 == 1, 2, 1))
+    acc_3         = accuracy_score(y_3, preds_3)
+    macro_f1_3    = f1_score(y_3, preds_3, average="macro",    zero_division=0)
+    weighted_f1_3 = f1_score(y_3, preds_3, average="weighted", zero_division=0)
 
     return {
-        "pipeline":          name,
-        "accuracy_3class":   round(acc_3,      4),
-        "accuracy_s1":       round(acc_s1,      4),
-        "pr_auc_s1":         round(pr_auc_s1,   4),
-        "pr_auc_s2":         round(pr_auc_s2,   4),
-        "best_f1_s1":        round(f1_s1,        4),
-        "macro_f1_3class":   round(macro_f1_3,  4),
-        "best_threshold_s1": round(thr,           3),
-        "timestamp":         datetime.now().isoformat(),
+        "pipeline":            name,
+        "weighted_f1_3class":  round(weighted_f1_3, 4),
+        "macro_f1_3class":     round(macro_f1_3,    4),
+        "accuracy_3class":     round(acc_3,         4),
+        "accuracy_s1":         round(acc_s1,        4),
+        "pr_auc_s1":           round(pr_auc_s1,     4),
+        "pr_auc_s2":           round(pr_auc_s2,     4),
+        "best_f1_s1":          round(f1_s1,         4),
+        "best_threshold_s1":   round(thr,           3),
+        "timestamp":           datetime.now().isoformat(),
     }

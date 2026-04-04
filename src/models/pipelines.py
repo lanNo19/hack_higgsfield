@@ -597,7 +597,7 @@ def run_all_pipelines(pipelines: list[str] | None = None) -> pd.DataFrame:
             log.error("Pipeline %s failed: %s", name, e, exc_info=True)
             results.append({"pipeline": name, "error": str(e)})
 
-    df = pd.DataFrame(results).sort_values("pr_auc_s1", ascending=False)
+    df = pd.DataFrame(results).sort_values("weighted_f1_3class", ascending=False)
 
     _ARTIFACTS.mkdir(parents=True, exist_ok=True)
     df.to_csv(_ARTIFACTS / "results_all.csv", index=False)

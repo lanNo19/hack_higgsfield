@@ -4,6 +4,7 @@ from __future__ import annotations
 import numpy as np
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import StackingClassifier
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
 from sklearn.neural_network import MLPClassifier
@@ -56,8 +57,9 @@ def build_catboost_s1(params: dict | None = None) -> CatBoostClassifier:
 
 
 def build_mlp_s1() -> SKPipeline:
-    """MLP with standard scaling. Used as ensemble component in Pipelines E/F."""
+    """MLP with imputation + standard scaling. Used as ensemble component in Pipelines E/F."""
     return SKPipeline([
+        ("imputer", SimpleImputer(strategy="median")),
         ("scaler", StandardScaler()),
         ("clf", MLPClassifier(
             hidden_layer_sizes=(256, 128, 64), activation="relu",
@@ -88,7 +90,12 @@ def build_stacking_s1(scale_pos_weight: float = 1.0) -> CalibratedClassifierCV:
         iterations=800, learning_rate=0.05, depth=7,
         auto_class_weights="Balanced", verbose=0, random_seed=42,
     )
-    meta = LogisticRegression(C=1.0, max_iter=300, random_state=42)
+    # Meta-learner wrapped with imputer: passthrough=True passes raw features
+    # (which may contain NaN) alongside base-model OOF predictions.
+    meta = SKPipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("clf", LogisticRegression(C=1.0, max_iter=300, random_state=42)),
+    ])
     stacker = StackingClassifier(
         estimators=[("lgbm", base_lgbm), ("xgb", base_xgb), ("cat", base_cat)],
         final_estimator=meta,

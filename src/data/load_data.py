@@ -75,8 +75,4 @@ def load_split(split: str) -> dict[str, pd.DataFrame]:
     base = data_path(split)
     prefix = f"{split}_users"
 
-    optional_tables = {"generations"}
-    return {
-        table: _load_table(base, prefix, table, optional=table in optional_tables)
-        for table in _TABLE_SUFFIX
-    }
+    return {table: _load_table(base, prefix, table) for table in _TABLE_SUFFIX}

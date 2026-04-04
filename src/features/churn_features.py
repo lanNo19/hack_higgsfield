@@ -197,7 +197,8 @@ def build_generation_features(
     active_days_frac = _safe_div(n_active_days, tenure_days.rename("td")).rename("active_days_fraction")
 
     act_win = pd.Timedelta(days=gen_cfg["activation_window_days"])
-    g_first7 = g[g["created_at"] <= sub_start + act_win]
+    act_cutoff = (sub_start + act_win).rename("_act_cutoff")
+    g_first7 = g[g["created_at"] <= g["user_id"].map(act_cutoff)]
     gens_first_7 = g_first7.groupby("user_id").size().rename("gens_first_7_days")
     gens_last_7 = g_last14.groupby("user_id").size().rename("gens_last_7_days")  # reuse last14 window halved — use 7d
 

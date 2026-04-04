@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 from sklearn.ensemble import VotingClassifier
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline as SKPipeline
 from sklearn.preprocessing import StandardScaler
@@ -39,8 +40,9 @@ def build_logreg_s2(params: dict | None = None) -> SKPipeline:
     if params:
         default_lr.update(params)
     return SKPipeline([
-        ("scaler", StandardScaler()),
-        ("clf",    LogisticRegression(**default_lr)),
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler",  StandardScaler()),
+        ("clf",     LogisticRegression(**default_lr)),
     ])
 
 
@@ -83,7 +85,8 @@ def build_voting_s2(y_volInv: np.ndarray) -> VotingClassifier:
         class_weights={0: 1, 1: spw}, verbose=0, random_seed=42,
     )
     lr_s2 = SKPipeline([
-        ("scaler", StandardScaler()),
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler",  StandardScaler()),
         ("clf", LogisticRegression(
             C=0.1, penalty="elasticnet", solver="saga",
             l1_ratio=0.5, class_weight="balanced", max_iter=500,
@@ -91,5 +94,5 @@ def build_voting_s2(y_volInv: np.ndarray) -> VotingClassifier:
     ])
     return VotingClassifier(
         estimators=[("xgb", xgb_s2), ("cat", cat_s2), ("lr", lr_s2)],
-        voting="soft", weights=[2, 2, 1], n_jobs=-1,
+        voting="soft", weights=[2, 2, 1], n_jobs=1,  # loky broken on Python 3.13/Linux
     )

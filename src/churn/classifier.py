@@ -69,7 +69,11 @@ def build_mlp_s1() -> SKPipeline:
 
 
 def build_stacking_s1(scale_pos_weight: float = 1.0) -> CalibratedClassifierCV:
-    """StackingClassifier (LGBM + XGB + CatBoost) with isotonic calibration."""
+    """StackingClassifier (LGBM + XGB + CatBoost) with isotonic calibration.
+
+    n_jobs=1 throughout: loky multiprocessing is broken on Python 3.13/Linux.
+    Each base learner still uses internal threading (n_jobs=-1 per model).
+    """
     base_lgbm = lgb.LGBMClassifier(
         n_estimators=1000, learning_rate=0.05, num_leaves=95,
         is_unbalance=True, subsample=0.80, colsample_bytree=0.70,
@@ -91,6 +95,6 @@ def build_stacking_s1(scale_pos_weight: float = 1.0) -> CalibratedClassifierCV:
         cv=StratifiedKFold(n_splits=5, shuffle=True, random_state=42),
         stack_method="predict_proba",
         passthrough=True,
-        n_jobs=-1,
+        n_jobs=1,   # loky broken on Python 3.13/Linux
     )
-    return CalibratedClassifierCV(stacker, method="isotonic", cv=3)
+    return CalibratedClassifierCV(stacker, method="isotonic", cv=3, n_jobs=1)

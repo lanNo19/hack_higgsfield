@@ -1,0 +1,69 @@
+# Python
+**pycache**/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+.eggs/
+*.egg-info/
+
+# uv
+.venv/
+venv/
+env/
+
+# jupyter nb
+.ipynb_checkpoints/
+
+# data
+data/raw/*
+data/interim/*
+data/processed/*
+
+# keep folder structure
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+
+# models, artifacts
+models/trained/*
+models/artifacts/*
+!models/trained/.gitkeep
+!models/artifacts/.gitkeep
+
+# reports, outputs
+reports/figures/*
+reports/final_presentation/*
+!reports/figures/.gitkeep
+!reports/final_presentation/.gitkeep
+
+# env
+.env
+.env.*
+*.env
+
+# logs, scripts, temp
+logs/
+*.log
+tmp/
+temp/
+
+# ide
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+*.csv
+*.parquet
+*.feather
+
+.streamlit/secrets.toml

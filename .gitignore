@@ -67,3 +67,4 @@ htmlcov/
 *.feather
 
 .streamlit/secrets.toml
+CLAUDE.md

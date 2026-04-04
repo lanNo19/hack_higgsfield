@@ -35,7 +35,7 @@ def build_logreg_s2(params: dict | None = None) -> SKPipeline:
     default_lr = dict(
         C=1.0, penalty="elasticnet", solver="saga",
         l1_ratio=0.5, class_weight="balanced",
-        max_iter=500, random_state=42,
+        max_iter=2000, random_state=42,
     )
     if params:
         default_lr.update(params)
@@ -89,7 +89,7 @@ def build_voting_s2(y_volInv: np.ndarray) -> VotingClassifier:
         ("scaler",  StandardScaler()),
         ("clf", LogisticRegression(
             C=0.1, penalty="elasticnet", solver="saga",
-            l1_ratio=0.5, class_weight="balanced", max_iter=500,
+            l1_ratio=0.5, class_weight="balanced", max_iter=2000,
         )),
     ])
     return VotingClassifier(

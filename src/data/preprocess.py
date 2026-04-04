@@ -6,6 +6,16 @@ from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 
+
+def _fix_year_1067(series: pd.Series) -> pd.Series:
+    """Synthetic data artifact: all timestamps stored as year 1067 instead of 2023.
+    Replace the year prefix before pd.to_datetime so the 956-year offset is restored.
+    Dates span 1067-08 to 1067-11 → 2023-08 to 2023-11, matching obs_date 2023-11-25.
+    """
+    if series.dtype == object:
+        return series.str.replace(r"^1067-", "2023-", regex=True)
+    return series
+
 # ── Quiz normalisation maps ────────────────────────────────────────────────────
 
 _TEAM_SIZE_ORDINAL: dict[str, int] = {
@@ -37,7 +47,9 @@ def preprocess_properties(df: pd.DataFrame) -> pd.DataFrame:
     plan_info = cfg["plan_info"]
 
     out = df.copy()
-    out["subscription_start_date"] = pd.to_datetime(out["subscription_start_date"], utc=True, errors="coerce")
+    out["subscription_start_date"] = pd.to_datetime(
+        _fix_year_1067(out["subscription_start_date"]), utc=True, errors="coerce"
+    )
     out["plan_ordinal"] = out["subscription_plan"].map({p: v["ordinal"] for p, v in plan_info.items()})
     out["plan_monthly_credits"] = out["subscription_plan"].map({p: v["monthly_credits"] for p, v in plan_info.items()})
     out["plan_monthly_cost_usd"] = out["subscription_plan"].map({p: v["monthly_cost_usd"] for p, v in plan_info.items()})
@@ -52,22 +64,22 @@ def preprocess_generations(df: pd.DataFrame) -> pd.DataFrame:
     out["is_free_model"] = out["credit_cost"].isna() | (out["credit_cost"] == 0)
     out["is_video"] = out["generation_type"].str.startswith("video_", na=False)
     out["is_image"] = out["generation_type"].str.startswith("image_", na=False)
-    # Ensure datetimes are tz-aware UTC
+    # Ensure datetimes are tz-aware UTC (fix year-1067 synthetic data offset first)
     for col in ["created_at", "completed_at", "failed_at"]:
         if col in out.columns:
-            out[col] = pd.to_datetime(out[col], utc=True, errors="coerce")
+            out[col] = pd.to_datetime(_fix_year_1067(out[col]), utc=True, errors="coerce")
     return out
 
 
 def preprocess_purchases(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    out["purchase_time"] = pd.to_datetime(out["purchase_time"], utc=True, errors="coerce")
+    out["purchase_time"] = pd.to_datetime(_fix_year_1067(out["purchase_time"]), utc=True, errors="coerce")
     return out
 
 
 def preprocess_transactions(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    out["transaction_time"] = pd.to_datetime(out["transaction_time"], utc=True, errors="coerce")
+    out["transaction_time"] = pd.to_datetime(_fix_year_1067(out["transaction_time"]), utc=True, errors="coerce")
     out["is_failed"] = out["failure_code"].notna()
     out["is_successful"] = out["failure_code"].isna()
     # Normalise billing country to uppercase for cross-table comparison

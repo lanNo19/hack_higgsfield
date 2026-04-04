@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import numpy as np
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import StackingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -70,11 +69,16 @@ def build_mlp_s1() -> SKPipeline:
     ])
 
 
-def build_stacking_s1(scale_pos_weight: float = 1.0) -> CalibratedClassifierCV:
-    """StackingClassifier (LGBM + XGB + CatBoost) with isotonic calibration.
+def build_stacking_s1(scale_pos_weight: float = 1.0) -> StackingClassifier:
+    """StackingClassifier (LGBM + XGB + CatBoost) with LogReg meta-learner.
 
     n_jobs=1 throughout: loky multiprocessing is broken on Python 3.13/Linux.
     Each base learner still uses internal threading (n_jobs=-1 per model).
+
+    No CalibratedClassifierCV wrapper: it would triple compute by doing 3-fold CV
+    over the whole stacker, cutting effective training data to ~53% of the fold.
+    No passthrough=True: 100+ raw NaN-heavy features confuse the meta LogReg.
+    The meta-learner receives only the 6 OOF probabilities (2 per base model).
     """
     base_lgbm = lgb.LGBMClassifier(
         n_estimators=1000, learning_rate=0.05, num_leaves=95,
@@ -90,18 +94,12 @@ def build_stacking_s1(scale_pos_weight: float = 1.0) -> CalibratedClassifierCV:
         iterations=800, learning_rate=0.05, depth=7,
         auto_class_weights="Balanced", verbose=0, random_seed=42,
     )
-    # Meta-learner wrapped with imputer: passthrough=True passes raw features
-    # (which may contain NaN) alongside base-model OOF predictions.
-    meta = SKPipeline([
-        ("imputer", SimpleImputer(strategy="median")),
-        ("clf", LogisticRegression(C=1.0, max_iter=300, random_state=42)),
-    ])
-    stacker = StackingClassifier(
+    meta = LogisticRegression(C=1.0, max_iter=1000, random_state=42)
+    return StackingClassifier(
         estimators=[("lgbm", base_lgbm), ("xgb", base_xgb), ("cat", base_cat)],
         final_estimator=meta,
         cv=StratifiedKFold(n_splits=5, shuffle=True, random_state=42),
         stack_method="predict_proba",
-        passthrough=True,
+        passthrough=False,
         n_jobs=1,   # loky broken on Python 3.13/Linux
     )
-    return CalibratedClassifierCV(stacker, method="isotonic", cv=3, n_jobs=1)

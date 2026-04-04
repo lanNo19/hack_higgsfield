@@ -27,7 +27,7 @@ from src.churn.classifier import (
     build_lgbm_focal,
     build_lgbm_unbalanced,
     build_mlp_s1,
-    build_stacking_s1,
+    build_stacking_s1,  # now returns StackingClassifier directly
 )
 from src.churn.thresholds import best_f1_threshold
 from src.churn.voluntary_vs_involuntary import (
@@ -368,7 +368,6 @@ def run_all_pipelines(pipelines: list[str] | None = None) -> pd.DataFrame:
             results.append({"pipeline": name, "error": str(e)})
 
     df = pd.DataFrame(results).sort_values("pr_auc_s1", ascending=False)
-    log.info("\n=== Final Rankings ===\n%s", df.to_string(index=False))
 
     _ARTIFACTS.mkdir(parents=True, exist_ok=True)
     df.to_csv(_ARTIFACTS / "results_all.csv", index=False)

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls /Users/ablajabdimalinov/Documents/repos/hack_higgsfield/*.py)"
+    ]
+  }
+}

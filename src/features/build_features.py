@@ -281,6 +281,17 @@ def build_feature_matrix(
     scores = _build_composite_scores(X)
     X = pd.concat([X, scores], axis=1)
 
+    # ── Integer label-encode string categoricals for LGBM/XGB ─────────────────
+    # CatBoost handles the raw strings; tree ensembles need integer codes.
+    _cat_cols = [
+        "country_encoded", "dominant_generation_type", "dominant_aspect_ratio",
+        "usage_plan_encoded", "role_encoded", "first_feature_encoded",
+        "source_encoded", "card_funding_type", "dominant_failure_code",
+    ]
+    for col in _cat_cols:
+        if col in X.columns and X[col].dtype == object:
+            X[f"{col}_int"] = pd.factorize(X[col].fillna("unknown"))[0]
+
     log.info("Feature matrix shape: %s", X.shape)
 
     # ── Labels ────────────────────────────────────────────────────────────────

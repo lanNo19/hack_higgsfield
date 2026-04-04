@@ -16,6 +16,11 @@ log = get_logger(__name__)
 
 # ── Feature group definitions ──────────────────────────────────────────────────
 
+P_FEATURES = [
+    "plan_ordinal", "plan_monthly_credits", "plan_monthly_cost_usd",
+    "tenure_days", "subscription_start_month", "subscription_start_dayofweek",
+]
+
 G_FEATURES = [
     "total_generations", "n_completed", "n_failed", "n_nsfw", "n_canceled",
     "n_queued_or_waiting", "completion_rate", "failure_rate_overall",
@@ -64,6 +69,7 @@ T_FEATURES = [
     "payment_failure_timing_vs_activity", "active_during_payment_failure",
     "time_to_first_payment_issue_days", "n_failed_txns_before_success",
     "payment_resilience_score",
+    "card_funding_type_int", "dominant_failure_code_int",
 ]
 
 Q_FEATURES = [
@@ -78,7 +84,14 @@ CS_FEATURES = [
     "rfm_recency_bin", "rfm_frequency_bin", "rfm_monetary_bin",
 ]
 
-S1_FEATURES = G_FEATURES + PU_FEATURES + Q_FEATURES + CS_FEATURES
+# Integer-encoded versions of string categoricals (for LGBM/XGB that need numeric input)
+CAT_INT_FEATURES = [
+    "country_encoded_int", "dominant_generation_type_int", "dominant_aspect_ratio_int",
+    "usage_plan_encoded_int", "role_encoded_int", "first_feature_encoded_int",
+    "source_encoded_int",
+]
+
+S1_FEATURES = P_FEATURES + G_FEATURES + PU_FEATURES + Q_FEATURES + CS_FEATURES + CAT_INT_FEATURES
 
 # Categorical columns used by CatBoost
 CAT_FEATURES_S1 = [

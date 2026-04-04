@@ -151,6 +151,7 @@ dependencies = [
     "supabase==2.15.1",
     "supafunc==0.9.4",
     "sympy==1.14.0",
+    "tabulate>=0.10.0",
     "terminado==0.18.1",
     "threadpoolctl==3.6.0",
     "tinycss2==1.4.0",

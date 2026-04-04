@@ -44,6 +44,13 @@ def _build_cross_table_features(
     obs_date = t.tz_convert("UTC") if t.tzinfo is not None else t.tz_localize("UTC")
     all_users = prop_feat.index
 
+    # Reindex all feature tables to the full user set so that Series comparisons
+    # (which require identical indices) and arithmetic all work correctly.
+    gen_feat = gen_feat.reindex(all_users)
+    txn_feat = txn_feat.reindex(all_users)
+    pur_feat = pur_feat.reindex(all_users)
+    quiz_feat = quiz_feat.reindex(all_users)
+
     parts = []
 
     # X1: payment failure timing vs last generation activity

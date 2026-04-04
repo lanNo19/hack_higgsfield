@@ -293,7 +293,7 @@ def build_generation_features(
 
     feat = pd.concat(parts, axis=1)
     feat.index.name = "user_id"
-    return _reindex_to_users(feat, all_users, fill_value=0.0)
+    return _reindex_to_users(feat, all_users, fill=0.0)
 
 
 # ── PU: Purchase features (PU1–PU18) ──────────────────────────────────────────

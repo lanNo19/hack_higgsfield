@@ -142,7 +142,7 @@ def build_generation_features(
         last_gen_type.str.startswith("video_", na=False)
     ).astype(int).rename("video_to_image_graduation")
 
-    dominant_gen_type = g.groupby("user_id")["generation_type"].agg(lambda x: x.mode().iloc[0] if len(x) else None)
+    dominant_gen_type = g.groupby("user_id")["generation_type"].agg(lambda x: x.mode().iloc[0] if len(x) and len(x.mode()) else None)
     image_model_1_share = _safe_div(
         g[g["generation_type"] == "image_model_1"].groupby("user_id").size(), total
     ).rename("image_model_1_share")
@@ -161,7 +161,7 @@ def build_generation_features(
     ).rename("pct_high_resolution")
 
     dominant_aspect = g.groupby("user_id")["aspect_ration"].agg(
-        lambda x: x.mode().iloc[0] if x.notna().any() else None
+        lambda x: x.mode().iloc[0] if x.notna().any() and len(x.mode()) else None
     ).rename("dominant_aspect_ratio")
 
     # ── 2f: Processing time (derived from timestamps) ─────────────────────────
@@ -266,7 +266,7 @@ def build_generation_features(
     pct_weekday = _safe_div(g_tod.groupby("user_id")["is_weekday"].sum(),
                             total).rename("pct_gens_weekdays")
     dominant_hour = g_tod.groupby("user_id")["hour"].agg(
-        lambda x: int(x.mode().iloc[0]) if len(x) else 0
+        lambda x: int(x.mode().iloc[0]) if len(x) and len(x.mode()) else 0
     ).rename("dominant_usage_hour")
 
     # ── Assemble ──────────────────────────────────────────────────────────────
@@ -444,7 +444,7 @@ def build_transaction_features(
     )
     dominant_fail_code = (
         failed.groupby("user_id")["failure_code"]
-        .agg(lambda x: x.mode().iloc[0] if len(x) else None)
+        .agg(lambda x: x.mode().iloc[0] if len(x) and len(x.mode()) else None)
         .rename("dominant_failure_code")
     )
 
@@ -468,7 +468,7 @@ def build_transaction_features(
         (t["digital_wallet"] != "none") & t["digital_wallet"].notna()
     ).groupby(t["user_id"]).any().astype(int).rename("uses_digital_wallet")
     card_funding_mode = (
-        grp["card_funding"].agg(lambda x: x.mode().iloc[0] if len(x) else None)
+        grp["card_funding"].agg(lambda x: x.mode().iloc[0] if len(x) and len(x.mode()) else None)
         .rename("card_funding_type")
     )
     pct_prepaid = _safe_div(

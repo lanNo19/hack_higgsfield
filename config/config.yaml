@@ -79,3 +79,34 @@ top_generation_types:
   - image_model_4
   - video_model_1
   - video_model_2
+
+# ── New experiment pipelines (G–J) ─────────────────────────────────────────────
+# A–F are always available. G–J are opt-in: add letters here or pass
+# --pipeline G H ... to main.py. A–F default set is kept so existing
+# best scores are never overwritten unless you explicitly run those names.
+pipelines:
+  enabled: [A, B, C, D, E, F]
+
+optuna:
+  n_trials: 80
+  timeout_seconds: 1800   # hard 30-min wall cap
+  cv_folds: 3             # faster search; final eval still uses 5-fold
+  metric: pr_auc_s1
+
+# PyTorch MLP used in Pipeline H
+tabnet:
+  hidden_dim: 256
+  n_layers: 4
+  dropout: 0.3
+  max_epochs: 100
+  patience: 15
+  batch_size: 2048
+  lr: 0.001
+
+# Pipeline J: keep only the top-k features by mean |SHAP|
+shap_selection:
+  top_k_features: 60
+
+# Pipeline I: SMOTE applied inside each CV fold (no leakage)
+smote:
+  k_neighbors: 5

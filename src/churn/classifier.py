@@ -14,6 +14,8 @@ import lightgbm as lgb
 import xgboost as xgb
 from catboost import CatBoostClassifier
 
+from src.churn.torch_classifier import TorchMLPClassifier
+
 
 def build_lgbm_focal(params: dict | None = None) -> lgb.LGBMClassifier:
     """LightGBM with is_unbalance (focal loss applied externally via lgb.train if needed)."""
@@ -67,6 +69,25 @@ def build_mlp_s1() -> SKPipeline:
             early_stopping=True, validation_fraction=0.1,
         )),
     ])
+
+
+def build_torch_mlp_s1(params: dict | None = None) -> TorchMLPClassifier:
+    """PyTorch MLP Stage 1 (Pipeline H). Hyper-params read from config.yaml[tabnet]."""
+    from src.utils.helpers import load_config
+    cfg = load_config().get("tabnet", {})
+    default = dict(
+        hidden_dim=cfg.get("hidden_dim", 256),
+        n_layers=cfg.get("n_layers", 4),
+        dropout=cfg.get("dropout", 0.3),
+        batch_size=cfg.get("batch_size", 2048),
+        lr=cfg.get("lr", 1e-3),
+        max_epochs=cfg.get("max_epochs", 100),
+        patience=cfg.get("patience", 15),
+        random_state=42,
+    )
+    if params:
+        default.update(params)
+    return TorchMLPClassifier(**default)
 
 
 def build_stacking_s1(scale_pos_weight: float = 1.0) -> StackingClassifier:

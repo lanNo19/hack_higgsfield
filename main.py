@@ -19,9 +19,9 @@ def main() -> None:
     parser.add_argument(
         "--pipeline",
         nargs="+",
-        choices=["A", "B", "C", "D", "E", "F"],
+        choices=["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
         default=None,
-        help="Which pipeline(s) to run (default: all)",
+        help="Which pipeline(s) to run (default: enabled list in config.yaml)",
     )
     args = parser.parse_args()
 

@@ -3,6 +3,8 @@ Training harness: data splitting and cross-validation loop shared by all pipelin
 """
 from __future__ import annotations
 
+import inspect
+
 import numpy as np
 import pandas as pd
 import lightgbm as lgb
@@ -42,6 +44,9 @@ def _fit_with_eval(
     elif isinstance(model, xgb.XGBClassifier):
         model.set_params(early_stopping_rounds=100)
         model.fit(X_tr, y_tr, eval_set=[(X_val, y_val)], verbose=log_period)
+    elif "eval_set" in inspect.signature(model.fit).parameters:
+        # Generic handler for models that accept eval_set (e.g. TorchMLPClassifier)
+        model.fit(X_tr, y_tr, eval_set=(X_val, y_val))
     else:
         model.fit(X_tr, y_tr)
 

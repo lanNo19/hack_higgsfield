@@ -139,8 +139,16 @@ def _build_cross_table_features(
         pass  # computed in transaction features as billing_matches_profile_country
     if "billing_address_country" in props_raw.columns:
         pass  # properties doesn't have billing address; handled in transaction features
-    # Derive from txn dominant billing country vs properties country_code
-    # (best effort — transaction billing country modal value per user)
+    # X13: billing country from transactions vs profile country from properties
+    if "dominant_billing_country" in txn_feat.columns and "country_code" in props_raw.columns:
+        props_country = (
+            props_raw.set_index("user_id")["country_code"]
+            .str.upper().str.strip()
+            .reindex(all_users)
+        )
+        billing_country = txn_feat["dominant_billing_country"].str.upper().str.strip()
+        x13 = (billing_country == props_country).astype(int).rename("billing_country_matches_profile")
+        parts.append(x13)
 
     # G26: feature expectation mismatch (wants video, uses mostly images)
     if "first_feature_video" in quiz_feat.columns and "video_generation_ratio" in gen_feat.columns:
@@ -287,6 +295,7 @@ def build_feature_matrix(
         "country_encoded", "dominant_generation_type", "dominant_aspect_ratio",
         "usage_plan_encoded", "role_encoded", "first_feature_encoded",
         "source_encoded", "card_funding_type", "dominant_failure_code",
+        "dominant_card_brand",
     ]
     for col in _cat_cols:
         if col in X.columns and X[col].dtype == object:

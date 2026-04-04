@@ -53,7 +53,7 @@ def build_catboost_s2(y_volInv: np.ndarray, params: dict | None = None) -> CatBo
     default = dict(
         iterations=600, learning_rate=0.06, depth=6, l2_leaf_reg=5.0,
         class_weights={0: 1.0, 1: float(neg / max(pos, 1))},
-        eval_metric="PRAUC", random_seed=42, verbose=0,
+        eval_metric="PRAUC", random_seed=42, verbose=50,
         early_stopping_rounds=40,
     )
     if params:
@@ -65,7 +65,7 @@ def build_lgbm_s2(params: dict | None = None) -> lgb.LGBMClassifier:
     """LightGBM Stage 2 for Pipelines E/F (T-features only)."""
     default = dict(
         n_estimators=700, learning_rate=0.05, num_leaves=63,
-        is_unbalance=True, n_jobs=-1, random_state=42, verbose=-1,
+        class_weight="balanced", n_jobs=-1, random_state=42, verbose=-1,
     )
     if params:
         default.update(params)

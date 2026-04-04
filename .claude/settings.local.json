@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls /Users/ablajabdimalinov/Documents/repos/hack_higgsfield/*.py)"
+      "Bash(ls /Users/ablajabdimalinov/Documents/repos/hack_higgsfield/*.py)",
+      "Bash(python /tmp/check_features.py)",
+      "Bash(python3)",
+      "Read(//private/tmp/**)",
+      "Bash(python3 /tmp/check_features.py)"
     ]
   }
 }

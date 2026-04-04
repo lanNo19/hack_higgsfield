@@ -193,7 +193,11 @@ def build_generation_features(
     days_to_first_gen = ((first_gen - sub_start).dt.days.clip(lower=0)).rename("days_to_first_generation")
     gen_span = ((last_gen - first_gen).dt.days.clip(lower=0)).rename("generation_span_days")
 
-    n_active_days = g.groupby("user_id")["created_at"].apply(lambda x: x.dt.normalize().nunique()).rename("n_active_days")
+    n_active_days = (
+        g.assign(_date=g["created_at"].dt.normalize())
+        .groupby("user_id")["_date"].nunique()
+        .rename("n_active_days")
+    )
     active_days_frac = _safe_div(n_active_days, tenure_days.rename("td")).rename("active_days_fraction")
 
     act_win = pd.Timedelta(days=gen_cfg["activation_window_days"])
@@ -471,6 +475,14 @@ def build_transaction_features(
         grp["card_funding"].agg(lambda x: x.mode().iloc[0] if len(x) and len(x.mode()) else None)
         .rename("card_funding_type")
     )
+    dominant_card_brand = (
+        grp["card_brand"].agg(lambda x: x.mode().iloc[0] if len(x) and len(x.mode()) else None)
+        .rename("dominant_card_brand")
+    )
+    dominant_billing_country = (
+        grp["billing_address_country"].agg(lambda x: x.mode().iloc[0] if len(x) and len(x.mode()) else None)
+        .rename("dominant_billing_country")
+    )
     pct_prepaid = _safe_div(
         t[t["is_prepaid"] == True].groupby("user_id").size(), n_total_txn
     ).rename("pct_prepaid_transactions")
@@ -514,7 +526,7 @@ def build_transaction_features(
         n_card_declined, n_cvc_fail, n_expired, n_auth_fail, n_proc_err,
         dominant_fail_code, payment_retry_count,
         uses_prepaid, uses_virtual, uses_business, uses_wallet,
-        card_funding_mode, pct_prepaid,
+        card_funding_mode, dominant_card_brand, dominant_billing_country, pct_prepaid,
         n_3d_friction, has_cvc_fail, cvc_fail_rate, n_cvc_unavail,
         total_txn_usd, avg_txn_usd, n_hv_txn,
         days_since_last_fail, days_since_last_success,

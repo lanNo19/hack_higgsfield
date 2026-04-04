@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import lightgbm as lgb
+import xgboost as xgb
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.metrics import average_precision_score
 
@@ -12,6 +14,36 @@ from src.utils.helpers import processed_path
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
+
+
+def _fit_with_eval(
+    model,
+    X_tr: pd.DataFrame,
+    y_tr: np.ndarray,
+    X_val: pd.DataFrame,
+    y_val: np.ndarray,
+    log_period: int = 100,
+) -> None:
+    """Fit with eval-set monitoring and early stopping for LGB/XGB; plain fit otherwise.
+
+    Logs validation metric every `log_period` rounds so overfitting is visible.
+    Early stopping triggers after 100 rounds without improvement.
+    """
+    if isinstance(model, lgb.LGBMClassifier):
+        model.fit(
+            X_tr, y_tr,
+            eval_set=[(X_val, y_val)],
+            eval_names=["val"],
+            callbacks=[
+                lgb.log_evaluation(period=log_period),
+                lgb.early_stopping(stopping_rounds=100, verbose=True),
+            ],
+        )
+    elif isinstance(model, xgb.XGBClassifier):
+        model.set_params(early_stopping_rounds=100)
+        model.fit(X_tr, y_tr, eval_set=[(X_val, y_val)], verbose=log_period)
+    else:
+        model.fit(X_tr, y_tr)
 
 
 # ── Feature group definitions ──────────────────────────────────────────────────
@@ -91,7 +123,19 @@ CAT_INT_FEATURES = [
     "source_encoded_int",
 ]
 
-S1_FEATURES = P_FEATURES + G_FEATURES + PU_FEATURES + Q_FEATURES + CS_FEATURES + CAT_INT_FEATURES
+# Cross-table features computed in build_features.py but previously missing from all lists
+CROSS_FEATURES = [
+    "days_last_purchase_to_last_gen", "spend_per_generation",
+    "plan_credit_utilization_pct", "plan_credit_surplus_deficit",
+    "generation_to_purchase_ratio", "is_likely_free_tier_user",
+    "generated_before_purchased", "credit_per_dollar_spent",
+    "feature_expectation_mismatch", "billing_country_matches_profile",
+    "dominant_card_brand_int",
+]
+
+# Stage 1 sees ALL feature groups — transaction signals predict overall churn too
+S1_FEATURES = (P_FEATURES + G_FEATURES + PU_FEATURES + T_FEATURES
+               + Q_FEATURES + CS_FEATURES + CROSS_FEATURES + CAT_INT_FEATURES)
 
 # Categorical columns used by CatBoost
 CAT_FEATURES_S1 = [
@@ -193,14 +237,18 @@ def run_two_stage_cv(
         y_tr  = y_binary[train_idx]
 
         s1 = build_s1()
-        s1.fit(X_tr, y_tr)
+        _fit_with_eval(s1, X_tr, y_tr, X_val, y_binary[val_idx])
         oof_s1[val_idx] = s1.predict_proba(X_val)[:, 1]
 
         churn_tr  = train_idx[y_binary[train_idx] == 1]
         churn_val = val_idx[y_binary[val_idx]   == 1]
         if len(churn_tr) > 10 and len(churn_val) > 0:
             s2 = build_s2()
-            s2.fit(X.iloc[churn_tr][t_feat], y_volInv[churn_tr])
+            _fit_with_eval(
+                s2,
+                X.iloc[churn_tr][t_feat], y_volInv[churn_tr],
+                X.iloc[churn_val][t_feat], y_volInv[churn_val],
+            )
             oof_s2[churn_val] = s2.predict_proba(
                 X.iloc[churn_val][t_feat]
             )[:, 1]

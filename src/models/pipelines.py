@@ -43,6 +43,7 @@ from src.models.train import (
     CAT_FEATURES_S2,
     S1_FEATURES,
     T_FEATURES,
+    _fit_with_eval,
     load_feature_matrix,
     make_labels,
     make_splits,
@@ -77,7 +78,10 @@ def run_pipeline_A(
 ) -> dict:
     log.info("=== Pipeline A: LightGBM (is_unbalance) + XGBoost ===")
 
-    def s2(): return build_xgb_s2(y_volInv)
+    # Pass only churned-user subset so scale_pos_weight reflects the actual 50/50
+    # vol vs invol balance in Stage 2, not the 75/25 overall class split
+    y_churned = y_volInv[y_binary == 1]
+    def s2(): return build_xgb_s2(y_churned)
 
     oof_s1, oof_s2 = run_two_stage_cv(build_lgbm_focal, s2, X, y_binary, y_volInv)
     _save_oof("A", oof_s1, oof_s2)
@@ -132,7 +136,7 @@ def _catboost_cv(
         val_pool   = Pool(Xval, label=y_binary[val_idx],   cat_features=cat_s1)
 
         s1 = build_catboost_s1()
-        s1.fit(train_pool, eval_set=val_pool, use_best_model=True)
+        s1.fit(train_pool, eval_set=val_pool, use_best_model=True, verbose=100)
         oof_s1[val_idx] = s1.predict_proba(val_pool)[:, 1]
 
         churn_tr  = train_idx[y_binary[train_idx] == 1]
@@ -146,7 +150,7 @@ def _catboost_cv(
             tp = Pool(Xtr2,  label=y_volInv[churn_tr],  cat_features=cat_s2)
             vp = Pool(Xval2, label=y_volInv[churn_val], cat_features=cat_s2)
             s2 = build_catboost_s2(y_volInv[churn_tr])
-            s2.fit(tp, eval_set=vp, use_best_model=True)
+            s2.fit(tp, eval_set=vp, use_best_model=True, verbose=50)
             oof_s2[churn_val] = s2.predict_proba(vp)[:, 1]
 
         log.info(
@@ -184,7 +188,8 @@ def run_pipeline_D(
     spw = neg / max(pos, 1)
 
     def s1(): return build_stacking_s1(scale_pos_weight=spw)
-    def s2(): return build_voting_s2(y_volInv)
+    y_churned = y_volInv[y_binary == 1]
+    def s2(): return build_voting_s2(y_churned)
 
     oof_s1, oof_s2 = run_two_stage_cv(s1, s2, X, y_binary, y_volInv)
     _save_oof("D", oof_s1, oof_s2)
@@ -261,8 +266,8 @@ def _three_level_cv(
         cat_m  = build_catboost_s1()
         mlp_m  = build_mlp_s1()
 
-        lgbm_m.fit(Xtr, y_tr)
-        cat_m.fit(train_pool, eval_set=val_pool, use_best_model=True)
+        _fit_with_eval(lgbm_m, Xtr, y_tr, Xval, y_binary[val_idx])
+        cat_m.fit(train_pool, eval_set=val_pool, use_best_model=True, verbose=100)
         mlp_m.fit(Xtr, y_tr)
 
         p_lgbm = lgbm_m.predict_proba(Xval)[:, 1]
@@ -275,7 +280,11 @@ def _three_level_cv(
         churn_val = val_idx[y_binary[val_idx]   == 1]
         if len(churn_tr) > 10 and len(churn_val) > 0:
             s2 = build_lgbm_s2()
-            s2.fit(X.iloc[churn_tr][t_feat], y_volInv[churn_tr])
+            _fit_with_eval(
+                s2,
+                X.iloc[churn_tr][t_feat], y_volInv[churn_tr],
+                X.iloc[churn_val][t_feat], y_volInv[churn_val],
+            )
             oof_p_invol[churn_val] = s2.predict_proba(
                 X.iloc[churn_val][t_feat]
             )[:, 1]

@@ -530,7 +530,7 @@ def build_quiz_features(quizzes: pd.DataFrame) -> pd.DataFrame:
     log.info("Building quiz features ...")
     cfg = load_config()
 
-    q = quizzes.set_index("user_id").copy()
+    q = quizzes.drop_duplicates(subset="user_id").set_index("user_id").copy()
 
     # Q1: Completion depth (count of non-null quiz fields)
     quiz_fields = ["source", "flow_type", "team_size", "experience", "usage_plan", "frustration", "first_feature", "role"]

@@ -227,10 +227,13 @@ def build_generation_features(
         y = grp["wcount"].values.astype(float)
         if x.max() == x.min():
             return 0.0
-        result = stats.linregress(x, y)
-        return float(result.slope)
+        return float(stats.linregress(x, y).slope)
 
-    engagement_slope = weekly.groupby("user_id").apply(_slope).rename("engagement_slope")
+    engagement_slope = (
+        weekly.groupby("user_id")
+        .apply(_slope, include_groups=False)
+        .rename("engagement_slope")
+    )
 
     # 14-day momentum: recent 14d vs prior 14d
     gens_last_14 = g_last14.groupby("user_id").size()

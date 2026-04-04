@@ -40,7 +40,8 @@ def _build_cross_table_features(
     obs_date: pd.Timestamp,
 ) -> pd.DataFrame:
     """Compute features that require joining multiple feature tables."""
-    obs_date = pd.Timestamp(obs_date, tz="UTC")
+    t = pd.Timestamp(obs_date)
+    obs_date = t.tz_convert("UTC") if t.tzinfo is not None else t.tz_localize("UTC")
     all_users = prop_feat.index
 
     parts = []

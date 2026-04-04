@@ -11,6 +11,11 @@ log = get_logger(__name__)
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+def _as_utc(ts) -> pd.Timestamp:
+    t = pd.Timestamp(ts)
+    return t.tz_convert("UTC") if t.tzinfo is not None else t.tz_localize("UTC")
+
+
 def _reindex_to_users(df: pd.DataFrame, all_users: pd.Index, fill: float = 0.0) -> pd.DataFrame:
     """Ensure every user_id in all_users appears in the result (fill missing with fill)."""
     return df.reindex(all_users, fill_value=fill)
@@ -26,7 +31,7 @@ def build_properties_features(props: pd.DataFrame, obs_date: pd.Timestamp) -> pd
     """Features from properties table. One row per user_id."""
     log.info("Building properties features ...")
     cfg = load_config()
-    obs_date = pd.Timestamp(obs_date, tz="UTC")
+    obs_date = _as_utc(obs_date)
 
     out = props.set_index("user_id")[
         ["plan_ordinal", "plan_monthly_credits", "plan_monthly_cost_usd",
@@ -53,7 +58,7 @@ def build_generation_features(
     """Features from generations table. One row per user_id."""
     log.info("Building generation features (28M rows — may take a moment) ...")
     cfg = load_config()
-    obs_date = pd.Timestamp(obs_date, tz="UTC")
+    obs_date = _as_utc(obs_date)
     gen_cfg = cfg["generation"]
 
     all_users = props.set_index("user_id").index
@@ -297,7 +302,7 @@ def build_generation_features(
 def build_purchase_features(purchases: pd.DataFrame, obs_date: pd.Timestamp) -> pd.DataFrame:
     """Features from purchases table. One row per user_id."""
     log.info("Building purchase features ...")
-    obs_date = pd.Timestamp(obs_date, tz="UTC")
+    obs_date = _as_utc(obs_date)
 
     pu = purchases.copy()
     pu["purchase_time"] = pd.to_datetime(pu["purchase_time"], utc=True, errors="coerce")
@@ -373,7 +378,7 @@ def build_transaction_features(
     log.info("Building transaction features ...")
     cfg = load_config()
     txn_cfg = cfg["transaction"]
-    obs_date = pd.Timestamp(obs_date, tz="UTC")
+    obs_date = _as_utc(obs_date)
 
     t = transactions.copy()
     t["transaction_time"] = pd.to_datetime(t["transaction_time"], utc=True, errors="coerce")

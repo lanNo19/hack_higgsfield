@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import joblib  # <-- Added to load your trained models
 from pathlib import Path
 
 from src.models.train import S1_FEATURES, T_FEATURES, safe_features
@@ -67,7 +68,39 @@ def predict_churn(
 
     output_df.to_csv(save_file, index=False)
 
-    # This will print the exact location of the file to your terminal
     print(f"Predictions saved successfully to: {save_file.resolve()}")
 
     return output_df
+
+
+# ==========================================
+# EXECUTION BLOCK
+# ==========================================
+if __name__ == "__main__":
+    # Get the root directory where predict.py lives
+    root_dir = Path(__file__).parent
+
+    # ---------------------------------------------------------
+    # YOU MUST UPDATE THESE 3 PATHS TO MATCH YOUR ACTUAL FILES
+    # ---------------------------------------------------------
+    # For example, if your data is inside a 'data' folder: root_dir / "data" / "users.csv"
+    data_path = root_dir / "YOUR_DATA_FILE.csv"
+    s1_model_path = root_dir / "YOUR_STAGE_1_MODEL.pkl"
+    s2_model_path = root_dir / "YOUR_STAGE_2_MODEL.pkl"
+
+    try:
+        print("Loading user data...")
+        user_data = pd.read_csv(data_path)
+
+        print("Loading models...")
+        s1 = joblib.load(s1_model_path)
+        s2 = joblib.load(s2_model_path)
+
+        print("Running predictions...")
+        predict_churn(user_df=user_data, s1_model=s1, s2_model=s2)
+
+    except FileNotFoundError as e:
+        print(f"\n[ERROR] File not found: {e.filename}")
+        print("Please edit the EXECUTION BLOCK at the bottom of predict.py to point to your actual file names.")
+    except Exception as e:
+        print(f"\n[ERROR] An unexpected error occurred: {e}")

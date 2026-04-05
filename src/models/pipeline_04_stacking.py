@@ -22,6 +22,7 @@ from sklearn.pipeline import Pipeline as SklearnPipeline
 from src.models.pipeline_utils import (
     ARTIFACTS, evaluate_proba, load_train_data,
     make_holdout, save_oof, save_result,
+    LGBM_DEVICE, XGB_DEVICE, CAT_TASK_TYPE,
 )
 from src.utils.logger import get_logger
 
@@ -35,17 +36,17 @@ def _make_base_learners() -> list[tuple[str, object]]:
         ("lgbm", lgb.LGBMClassifier(
             objective="multiclass", num_class=3, n_estimators=500,
             learning_rate=0.05, num_leaves=63, class_weight="balanced",
-            n_jobs=-1, random_state=42, verbose=-1,
+            n_jobs=-1, random_state=42, verbose=-1, device=LGBM_DEVICE,
         )),
         ("xgb", xgb.XGBClassifier(
             objective="multi:softprob", num_class=3, n_estimators=500,
             learning_rate=0.05, max_depth=6, tree_method="hist",
-            n_jobs=-1, random_state=42, verbosity=0,
+            device=XGB_DEVICE, n_jobs=-1, random_state=42, verbosity=0,
         )),
         ("catboost", CatBoostClassifier(
             iterations=500, learning_rate=0.05, depth=6,
             auto_class_weights="Balanced", loss_function="MultiClass",
-            random_seed=42, verbose=False, thread_count=-1,
+            task_type=CAT_TASK_TYPE, random_seed=42, verbose=False,
         )),
         ("rf", RandomForestClassifier(
             n_estimators=500, max_depth=None, max_features="sqrt",

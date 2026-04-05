@@ -1,9 +1,20 @@
-"""Shared utilities for all strategy pipelines (Pipelines 1-12)."""
+"""Shared utilities for all strategy pipelines (Pipelines 1-13)."""
 from __future__ import annotations
 
 import csv
 from datetime import datetime
 from pathlib import Path
+
+# ── GPU detection ──────────────────────────────────────────────────────────────
+try:
+    import torch as _torch
+    GPU_AVAILABLE = _torch.cuda.is_available()
+except ImportError:
+    GPU_AVAILABLE = False
+
+LGBM_DEVICE   = "cuda" if GPU_AVAILABLE else "cpu"
+XGB_DEVICE    = "cuda" if GPU_AVAILABLE else "cpu"
+CAT_TASK_TYPE = "GPU"  if GPU_AVAILABLE else "CPU"
 
 import numpy as np
 import pandas as pd

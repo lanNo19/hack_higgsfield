@@ -19,6 +19,7 @@ from sklearn.model_selection import StratifiedKFold
 from src.models.pipeline_utils import (
     ARTIFACTS, evaluate_proba, load_train_data,
     make_holdout, save_oof, save_result,
+    LGBM_DEVICE, XGB_DEVICE, CAT_TASK_TYPE,
 )
 from src.utils.logger import get_logger
 
@@ -60,6 +61,7 @@ def _lgbm_objective(trial: optuna.Trial, X: np.ndarray, y: np.ndarray) -> float:
         n_jobs=-1,
         random_state=42,
         verbose=-1,
+        device=LGBM_DEVICE,
     )
     return _cv_macro_f1(lambda: lgb.LGBMClassifier(**params), X, y)
 
@@ -67,11 +69,18 @@ def _lgbm_objective(trial: optuna.Trial, X: np.ndarray, y: np.ndarray) -> float:
 def tune_lgbm(X, y) -> dict:
     log.info("Tuning LightGBM (%d trials)...", N_TRIALS)
     study = optuna.create_study(
+        study_name="p02_lgbm",
+        storage=f"sqlite:///{ARTIFACTS}/optuna_p02.db",
+        load_if_exists=True,
         direction="maximize",
         sampler=optuna.samplers.TPESampler(seed=42),
         pruner=optuna.pruners.MedianPruner(),
     )
-    study.optimize(lambda t: _lgbm_objective(t, X, y), n_trials=N_TRIALS, show_progress_bar=False)
+    done = len(study.trials)
+    remaining = max(0, N_TRIALS - done)
+    if done > 0:
+        log.info("Resuming LightGBM study (%d trials done, %d remaining)...", done, remaining)
+    study.optimize(lambda t: _lgbm_objective(t, X, y), n_trials=remaining, show_progress_bar=False)
     log.info("LightGBM best macro_f1=%.4f", study.best_value)
     return study.best_params
 
@@ -100,6 +109,7 @@ def _xgb_objective(trial: optuna.Trial, X, y) -> float:
         reg_lambda=trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
         max_delta_step=trial.suggest_int("max_delta_step", 0, 5),
         tree_method="hist",
+        device=XGB_DEVICE,
         n_jobs=-1,
         random_state=42,
         eval_metric="mlogloss",
@@ -118,11 +128,18 @@ def _xgb_objective(trial: optuna.Trial, X, y) -> float:
 def tune_xgb(X, y) -> dict:
     log.info("Tuning XGBoost (%d trials)...", N_TRIALS)
     study = optuna.create_study(
+        study_name="p02_xgb",
+        storage=f"sqlite:///{ARTIFACTS}/optuna_p02.db",
+        load_if_exists=True,
         direction="maximize",
         sampler=optuna.samplers.TPESampler(seed=42),
         pruner=optuna.pruners.MedianPruner(),
     )
-    study.optimize(lambda t: _xgb_objective(t, X, y), n_trials=N_TRIALS, show_progress_bar=False)
+    done = len(study.trials)
+    remaining = max(0, N_TRIALS - done)
+    if done > 0:
+        log.info("Resuming XGBoost study (%d trials done, %d remaining)...", done, remaining)
+    study.optimize(lambda t: _xgb_objective(t, X, y), n_trials=remaining, show_progress_bar=False)
     log.info("XGBoost best macro_f1=%.4f", study.best_value)
     return study.best_params
 
@@ -142,9 +159,9 @@ def _cat_objective(trial: optuna.Trial, X, y) -> float:
         auto_class_weights=trial.suggest_categorical("auto_class_weights", ["Balanced", "SqrtBalanced"]),
         loss_function="MultiClass",
         eval_metric="TotalF1",
+        task_type=CAT_TASK_TYPE,
         random_seed=42,
         verbose=False,
-        thread_count=-1,
     )
     cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
     scores = []
@@ -159,11 +176,18 @@ def _cat_objective(trial: optuna.Trial, X, y) -> float:
 def tune_catboost(X, y) -> dict:
     log.info("Tuning CatBoost (%d trials)...", N_TRIALS)
     study = optuna.create_study(
+        study_name="p02_catboost",
+        storage=f"sqlite:///{ARTIFACTS}/optuna_p02.db",
+        load_if_exists=True,
         direction="maximize",
         sampler=optuna.samplers.TPESampler(seed=42),
         pruner=optuna.pruners.MedianPruner(),
     )
-    study.optimize(lambda t: _cat_objective(t, X, y), n_trials=N_TRIALS, show_progress_bar=False)
+    done = len(study.trials)
+    remaining = max(0, N_TRIALS - done)
+    if done > 0:
+        log.info("Resuming CatBoost study (%d trials done, %d remaining)...", done, remaining)
+    study.optimize(lambda t: _cat_objective(t, X, y), n_trials=remaining, show_progress_bar=False)
     log.info("CatBoost best macro_f1=%.4f", study.best_value)
     return study.best_params
 
@@ -204,14 +228,19 @@ def run(n_trials: int = N_TRIALS) -> dict:
     for name, tune_fn, build_fn_factory in [
         ("lgbm", tune_lgbm, lambda p: lgb.LGBMClassifier(
             objective="multiclass", num_class=3, class_weight="balanced",
-            n_jobs=-1, random_state=42, verbose=-1, **p)),
+            n_jobs=-1, random_state=42, verbose=-1, device=LGBM_DEVICE, **p)),
         ("xgb", tune_xgb, lambda p: xgb.XGBClassifier(
             objective="multi:softprob", num_class=3, tree_method="hist",
-            n_jobs=-1, random_state=42, verbosity=0, **p)),
+            device=XGB_DEVICE, n_jobs=-1, random_state=42, verbosity=0, **p)),
         ("catboost", tune_catboost, lambda p: CatBoostClassifier(
-            loss_function="MultiClass", random_seed=42, verbose=False,
-            thread_count=-1, **p)),
+            loss_function="MultiClass", task_type=CAT_TASK_TYPE,
+            random_seed=42, verbose=False, **p)),
     ]:
+        # Skip if OOF already saved (allows resuming after Ctrl+C)
+        if (ARTIFACTS / f"oof_p02_{name}.npy").exists():
+            log.info("Skipping %s — OOF already exists, loading saved results.", name)
+            continue
+
         params = tune_fn(X_tv, y_tv)
         best_params[name] = params
 

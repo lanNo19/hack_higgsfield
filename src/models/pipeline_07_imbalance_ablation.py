@@ -26,6 +26,7 @@ from sklearn.model_selection import StratifiedKFold
 
 from src.models.pipeline_utils import (
     evaluate_proba, load_train_data, make_holdout, save_result,
+    LGBM_DEVICE, XGB_DEVICE,
 )
 from src.utils.logger import get_logger
 
@@ -74,6 +75,7 @@ def _lgbm_base_params(class_weight=None) -> dict:
         n_jobs=-1,
         random_state=42,
         verbose=-1,
+        device=LGBM_DEVICE,
     )
 
 
@@ -133,7 +135,7 @@ def run() -> list[dict]:
         def _make_focal_model(g=gamma):
             return xgb.XGBClassifier(
                 num_class=3, n_estimators=500, learning_rate=0.05,
-                max_depth=6, tree_method="hist", n_jobs=-1,
+                max_depth=6, tree_method="hist", device=XGB_DEVICE, n_jobs=-1,
                 random_state=42, verbosity=0,
                 objective=_make_focal_objective(g),
                 eval_metric="mlogloss",

@@ -34,6 +34,7 @@ from sklearn.model_selection import StratifiedKFold
 from src.models.pipeline_utils import (
     ARTIFACTS, CLASS_NAMES, evaluate_proba, load_train_data,
     make_holdout, save_oof, save_result, load_oof,
+    LGBM_DEVICE, XGB_DEVICE, CAT_TASK_TYPE,
 )
 from src.utils.helpers import data_path, root_path
 from src.utils.logger import get_logger
@@ -231,6 +232,7 @@ def _tune_high_bin(X, y, model_type: str, n_trials: int = N_TRIALS) -> dict:
                 reg_lambda=trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
                 max_bin=8192,   # ← high bin count for digit features
                 class_weight="balanced", n_jobs=-1, random_state=42, verbose=-1,
+                device=LGBM_DEVICE,
             )
             clf = lgb.LGBMClassifier(**params)
 
@@ -246,7 +248,7 @@ def _tune_high_bin(X, y, model_type: str, n_trials: int = N_TRIALS) -> dict:
                 reg_alpha=trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
                 reg_lambda=trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
                 max_bin=16000,  # ← XGBoost high bin count
-                tree_method="hist", n_jobs=-1, random_state=42, verbosity=0,
+                tree_method="hist", device=XGB_DEVICE, n_jobs=-1, random_state=42, verbosity=0,
             )
             clf = xgb.XGBClassifier(**params)
 
@@ -260,7 +262,8 @@ def _tune_high_bin(X, y, model_type: str, n_trials: int = N_TRIALS) -> dict:
                 random_strength=trial.suggest_float("random_strength", 0.1, 5.0),
                 auto_class_weights="Balanced",
                 loss_function="MultiClass",
-                random_seed=42, verbose=False, thread_count=-1,
+                task_type=CAT_TASK_TYPE,
+                random_seed=42, verbose=False,
             )
             clf = CatBoostClassifier(**params)
 
@@ -361,16 +364,16 @@ def run(n_trials: int = N_TRIALS) -> dict:
         ("lgbm_highbin", "lgbm",
          lambda p: lgb.LGBMClassifier(
              objective="multiclass", num_class=3, class_weight="balanced",
-             max_bin=8192, n_jobs=-1, random_state=42, verbose=-1, **p)),
+             max_bin=8192, device=LGBM_DEVICE, n_jobs=-1, random_state=42, verbose=-1, **p)),
         ("xgb_highbin", "xgb",
          lambda p: xgb.XGBClassifier(
              objective="multi:softprob", num_class=3, tree_method="hist",
-             max_bin=16000, n_jobs=-1, random_state=42, verbosity=0, **p)),
+             max_bin=16000, device=XGB_DEVICE, n_jobs=-1, random_state=42, verbosity=0, **p)),
         ("cat_highbin", "catboost",
          lambda p: CatBoostClassifier(
              loss_function="MultiClass", border_count=254,
-             auto_class_weights="Balanced", random_seed=42,
-             verbose=False, thread_count=-1, **p)),
+             auto_class_weights="Balanced", task_type=CAT_TASK_TYPE,
+             random_seed=42, verbose=False, **p)),
     ]
 
     all_oof_tv   = []

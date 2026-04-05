@@ -20,7 +20,7 @@ from sklearn.model_selection import StratifiedKFold
 
 from src.models.pipeline_utils import (
     ARTIFACTS, evaluate_proba, hierarchical_to_3class,
-    load_train_data, make_holdout, save_oof, save_result,
+    load_train_data, make_holdout, save_oof, save_result, LGBM_DEVICE,
 )
 from src.utils.logger import get_logger
 
@@ -47,7 +47,7 @@ def _tune_binary_lgbm(X, y_bin, label: str, n_trials: int = N_TRIALS) -> dict:
             reg_alpha=trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
             reg_lambda=trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
             class_weight="balanced",
-            n_jobs=-1, random_state=42, verbose=-1,
+            n_jobs=-1, random_state=42, verbose=-1, device=LGBM_DEVICE,
         )
         cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
         scores = []
@@ -99,7 +99,7 @@ def run(n_trials: int = N_TRIALS) -> dict:
 
     for fold, (tr, val) in enumerate(cv.split(X_tv, y_s1_tv)):
         # Stage 1
-        m1 = lgb.LGBMClassifier(n_jobs=-1, random_state=42, verbose=-1,
+        m1 = lgb.LGBMClassifier(n_jobs=-1, random_state=42, verbose=-1, device=LGBM_DEVICE,
                                   class_weight="balanced", **params_s1)
         m1.fit(X_tv.iloc[tr], y_s1_tv[tr])
         oof_s1[val] = m1.predict_proba(X_tv.iloc[val])[:, 1]
@@ -108,7 +108,7 @@ def run(n_trials: int = N_TRIALS) -> dict:
         churn_tr = tr[y_s1_tv[tr] == 1]
         churn_val = val[y_s1_tv[val] == 1]
         if len(churn_tr) > 20 and len(churn_val) > 0:
-            m2 = lgb.LGBMClassifier(n_jobs=-1, random_state=42, verbose=-1,
+            m2 = lgb.LGBMClassifier(n_jobs=-1, random_state=42, verbose=-1, device=LGBM_DEVICE,
                                      class_weight="balanced", **params_s2)
             m2.fit(X_tv.iloc[churn_tr], y_s2_tv[churn_tr])
             oof_s2[churn_val] = m2.predict_proba(X_tv.iloc[churn_val])[:, 1]
@@ -122,12 +122,12 @@ def run(n_trials: int = N_TRIALS) -> dict:
 
     # ── Holdout evaluation ────────────────────────────────────────────────────
     # Retrain on full trainval
-    m1_final = lgb.LGBMClassifier(n_jobs=-1, random_state=42, verbose=-1,
+    m1_final = lgb.LGBMClassifier(n_jobs=-1, random_state=42, verbose=-1, device=LGBM_DEVICE,
                                     class_weight="balanced", **params_s1)
     m1_final.fit(X_tv, y_s1_tv)
     hold_s1 = m1_final.predict_proba(X_hold)[:, 1]
 
-    m2_final = lgb.LGBMClassifier(n_jobs=-1, random_state=42, verbose=-1,
+    m2_final = lgb.LGBMClassifier(n_jobs=-1, random_state=42, verbose=-1, device=LGBM_DEVICE,
                                     class_weight="balanced", **params_s2)
     m2_final.fit(X_churn, y_churn_s2)
     hold_s2 = m2_final.predict_proba(X_hold)[:, 1]

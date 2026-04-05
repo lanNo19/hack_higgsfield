@@ -21,7 +21,7 @@ from sklearn.model_selection import StratifiedKFold
 
 from src.models.pipeline_utils import (
     ARTIFACTS, evaluate_proba, load_train_data,
-    make_holdout, save_oof, save_result,
+    make_holdout, save_oof, save_result, LGBM_DEVICE,
 )
 from src.utils.logger import get_logger
 
@@ -76,7 +76,7 @@ def _oof_binary(params, X, y_bin, n_splits=CV_FOLDS) -> np.ndarray:
 
     for tr, val in cv.split(X, y_bin):
         base = lgb.LGBMClassifier(n_jobs=-1, random_state=42, verbose=-1,
-                                   class_weight="balanced", **params)
+                                   class_weight="balanced", device=LGBM_DEVICE, **params)
         cal = CalibratedClassifierCV(base, cv=3, method="sigmoid")
         cal.fit(X.iloc[tr], y_bin[tr])
         oof[val] = cal.predict_proba(X.iloc[val])[:, 1]
@@ -116,7 +116,7 @@ def run(n_trials: int = N_TRIALS) -> dict:
 
         # Holdout: retrain calibrated model on full trainval
         base = lgb.LGBMClassifier(n_jobs=-1, random_state=42, verbose=-1,
-                                   class_weight="balanced", **params)
+                                   class_weight="balanced", device=LGBM_DEVICE, **params)
         cal = CalibratedClassifierCV(base, cv=5, method="sigmoid")
         cal.fit(X_tv, y_bin_tv)
         hold_per_class[cls_name] = cal.predict_proba(X_hold)[:, 1]

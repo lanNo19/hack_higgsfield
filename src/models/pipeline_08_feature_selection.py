@@ -21,7 +21,7 @@ from sklearn.metrics import f1_score
 from sklearn.model_selection import StratifiedKFold
 
 from src.models.pipeline_utils import (
-    evaluate_proba, load_train_data, make_holdout, save_result,
+    evaluate_proba, load_train_data, make_holdout, save_result, LGBM_DEVICE,
 )
 from src.utils.logger import get_logger
 
@@ -36,7 +36,7 @@ def _get_permutation_top_k(X: pd.DataFrame, y: np.ndarray, k: int) -> list[str]:
     m = lgb.LGBMClassifier(
         objective="multiclass", num_class=3, n_estimators=200,
         learning_rate=0.1, class_weight="balanced",
-        n_jobs=-1, random_state=42, verbose=-1,
+        n_jobs=-1, random_state=42, verbose=-1, device=LGBM_DEVICE,
     )
     m.fit(X, y)
     perm = permutation_importance(m, X, y, n_repeats=5, random_state=42,
@@ -89,7 +89,7 @@ def _cv_oof_features(X: pd.DataFrame, y: np.ndarray, features: list[str],
         m = lgb.LGBMClassifier(
             objective="multiclass", num_class=3, n_estimators=500,
             learning_rate=0.05, num_leaves=63, class_weight="balanced",
-            n_jobs=-1, random_state=42, verbose=-1,
+            n_jobs=-1, random_state=42, verbose=-1, device=LGBM_DEVICE,
         )
         m.fit(Xf.iloc[tr], y[tr])
         oof[val] = m.predict_proba(Xf.iloc[val])

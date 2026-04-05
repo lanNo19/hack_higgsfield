@@ -13,7 +13,7 @@ from sklearn.model_selection import StratifiedKFold
 
 from src.models.pipeline_utils import (
     CLASS_NAMES, evaluate_proba, load_train_data,
-    make_holdout, save_oof, save_result,
+    make_holdout, save_oof, save_result, LGBM_DEVICE,
 )
 from src.utils.logger import get_logger
 
@@ -45,6 +45,7 @@ def run() -> dict:
         n_jobs=-1,
         random_state=42,
         verbose=-1,
+        device=LGBM_DEVICE,
     )
 
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)

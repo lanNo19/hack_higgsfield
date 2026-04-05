@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from pathlib import Path  # Added for safe file path handling
 
 from src.models.train import S1_FEATURES, T_FEATURES, safe_features
 
@@ -33,7 +34,8 @@ def predict_churn(
 ) -> pd.DataFrame:
     """
     Two-stage batch inference.
-    Creates a dedicated output dataframe with only user_id and predicted_status.
+    Creates a dedicated output dataframe with only user_id and predicted_status,
+    and saves it to /predictions/prediction.csv.
     """
     # 1. Logic processing (internal temporary df)
     df = apply_zero_gen_gate(user_df)
@@ -55,13 +57,22 @@ def predict_churn(
         )
 
     # 2. CREATE ADDITIONAL DATA FRAME (The Clean Version)
-    # Keep only the very first column (index 0, assumed to be user IDs)
     output_df = df.iloc[:, [0]].copy()
-
-    # Add your calculated predictions as the second column
     output_df["predicted_status"] = df["final_label"]
-
-    # Rename the columns to exactly what you requested
     output_df.columns = ["user_id", "predicted_status"]
+
+    # 3. SAVE THE RESULT TO SPECIFIED PATH
+    # Get the directory where this python file is currently located
+    current_dir = Path(__file__).parent
+
+    # Construct the path to the predictions folder and the csv file
+    save_dir = current_dir / "predictions"
+    save_file = save_dir / "prediction.csv"
+
+    # Create the 'predictions' directory if it doesn't already exist
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save the file (index=False prevents pandas from writing row numbers)
+    output_df.to_csv(save_file, index=False)
 
     return output_df

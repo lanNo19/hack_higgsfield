@@ -61,10 +61,13 @@ def predict_churn(
     output_df["predicted_status"] = df["final_label"]
     output_df.columns = ["user_id", "predicted_status"]
 
-    # 3. SAVE THE RESULT TO THE SAME FOLDER
+    # 3. SAVE THE RESULT TO THE SAME FOLDER AND PRINT THE PATH
     current_dir = Path(__file__).parent
     save_file = current_dir / "prediction.csv"
 
     output_df.to_csv(save_file, index=False)
+
+    # This will print the exact location of the file to your terminal
+    print(f"Predictions saved successfully to: {save_file.resolve()}")
 
     return output_df

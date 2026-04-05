@@ -12,7 +12,7 @@ try:
 except ImportError:
     GPU_AVAILABLE = False
 
-LGBM_DEVICE   = "cuda" if GPU_AVAILABLE else "cpu"
+LGBM_DEVICE   = "cpu"                              # pip LightGBM lacks CUDA build; fast enough on CPU
 XGB_DEVICE    = "cuda" if GPU_AVAILABLE else "cpu"
 CAT_TASK_TYPE = "GPU"  if GPU_AVAILABLE else "CPU"
 

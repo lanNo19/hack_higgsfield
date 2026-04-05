@@ -39,7 +39,7 @@ def predict_churn(
     Two-stage batch inference returning only labels.
 
     Returns:
-        DataFrame with columns: user_id, predicted_category
+        DataFrame with columns: user_id, predicted_status
     """
     # 1. Apply hard rules
     user_df = apply_zero_gen_gate(user_df)
@@ -64,13 +64,11 @@ def predict_churn(
             probs_s2 >= 0.5, "invol_churn", "vol_churn"
         )
 
-    # 4. Cleanup: Keep only user_id and final_label
-    # We reset the index to turn 'user_id' from an index into a regular column
+    # 4. Final Formatting
+    # Ensure 'user_id' is a column and rename the status column
     result = user_df[["final_label"]].copy()
     result.index.name = "user_id"
     result = result.reset_index()
+    result = result.rename(columns={"final_label": "predicted_status"})
 
-    # Rename column to your specific requirement
-    result = result.rename(columns={"final_label": "predicted_category"})
-
-    return result
+    return result[["user_id", "predicted_status"]]

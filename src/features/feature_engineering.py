@@ -443,10 +443,13 @@ def build_generation_features(gens: pd.DataFrame, ref_date: pd.Timestamp) -> pd.
     ar_col = [c for c in g.columns if "aspect" in c.lower() or "ratio" in c.lower()]
     if ar_col:
         ar_name = ar_col[0]
-        ar_pivot = g.groupby(["user_id", ar_name]).size().unstack(fill_value=0)
-        ar_pivot.columns = [f"n_ar_{c}" for c in ar_pivot.columns]
-        ar_pivot = ar_pivot.reset_index()
-        agg = agg.merge(ar_pivot, on="user_id", how="left")
+        if g[ar_name].nunique() <= 20:
+            ar_pivot = g.groupby(["user_id", ar_name]).size().unstack(fill_value=0)
+            ar_pivot.columns = [f"n_ar_{c}" for c in ar_pivot.columns]
+            ar_pivot = ar_pivot.reset_index()
+            agg = agg.merge(ar_pivot, on="user_id", how="left")
+        else:
+            print(f"  [SKIP] aspect ratio pivot skipped (high cardinality: {g[ar_name].nunique()} unique values)")
 
     # ---- Generation type diversity (Shannon entropy) ----
     def type_entropy(group):

@@ -8,9 +8,7 @@ from src.models.train import S1_FEATURES, T_FEATURES, safe_features
 
 
 def apply_zero_gen_gate(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Hard-rule pre-filter applied before any model scoring.
-    """
+    """Hard-rule pre-filter applied before any model scoring."""
     df = df.copy()
     if "final_label" not in df.columns:
         df["final_label"] = np.nan
@@ -25,7 +23,6 @@ def apply_zero_gen_gate(df: pd.DataFrame) -> pd.DataFrame:
         )
         df.loc[mask, "final_label"] = "invol_churn"
 
-    df["is_zero_gen_user"] = (df.get("total_generations", 0) == 0).astype(int)
     return df
 
 
@@ -36,39 +33,35 @@ def predict_churn(
         threshold_s1: float = 0.30,
 ) -> pd.DataFrame:
     """
-    Two-stage batch inference returning only labels.
-
-    Returns:
-        DataFrame with columns: user_id, predicted_status
+    Returns ONLY user_id and predicted_status.
     """
-    # 1. Apply hard rules
-    user_df = apply_zero_gen_gate(user_df)
-    needs_model = user_df["final_label"].isna()
+    # 1. Setup working copy
+    df = apply_zero_gen_gate(user_df)
+    needs_model = df["final_label"].isna()
 
-    s1_feat = safe_features(user_df, S1_FEATURES)
-    t_feat = safe_features(user_df, T_FEATURES)
+    s1_feat = safe_features(df, S1_FEATURES)
+    t_feat = safe_features(df, T_FEATURES)
 
-    # 2. Stage 1 Inference
+    # 2. Run Stage 1 (needed for logic, but probs won't be in final output)
     if needs_model.sum() > 0:
-        probs_s1 = s1_model.predict_proba(user_df.loc[needs_model, s1_feat])[:, 1]
-        user_df.loc[needs_model, "churn_probability"] = probs_s1
+        probs_s1 = s1_model.predict_proba(df.loc[needs_model, s1_feat])[:, 1]
+        df.loc[needs_model, "temp_probs"] = probs_s1
 
-        not_churn_mask = needs_model & (user_df["churn_probability"] < threshold_s1)
-        user_df.loc[not_churn_mask, "final_label"] = "not_churned"
+        not_churn_mask = needs_model & (df["temp_probs"] < threshold_s1)
+        df.loc[not_churn_mask, "final_label"] = "not_churned"
 
-    # 3. Stage 2 Inference
-    churn_idx = needs_model & (user_df["churn_probability"].fillna(0) >= threshold_s1)
+    # 3. Run Stage 2
+    churn_idx = needs_model & (df["temp_probs"].fillna(0) >= threshold_s1)
     if churn_idx.sum() > 0:
-        probs_s2 = s2_model.predict_proba(user_df.loc[churn_idx, t_feat])[:, 1]
-        user_df.loc[churn_idx, "final_label"] = np.where(
+        probs_s2 = s2_model.predict_proba(df.loc[churn_idx, t_feat])[:, 1]
+        df.loc[churn_idx, "final_label"] = np.where(
             probs_s2 >= 0.5, "invol_churn", "vol_churn"
         )
 
-    # 4. Final Formatting
-    # Ensure 'user_id' is a column and rename the status column
-    result = user_df[["final_label"]].copy()
-    result.index.name = "user_id"
-    result = result.reset_index()
-    result = result.rename(columns={"final_label": "predicted_status"})
+    # 4. THE CLEANUP: This part forces the 2-column output
+    # We reset the index to get 'user_id' as a column, then filter and rename.
+    df.index.name = "user_id"
+    final_output = df.reset_index()[["user_id", "final_label"]]
+    final_output = final_output.rename(columns={"final_label": "predicted_status"})
 
-    return result[["user_id", "predicted_status"]]
+    return final_output

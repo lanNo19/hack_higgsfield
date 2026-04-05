@@ -27,14 +27,28 @@ DEFAULT_PARAMS_FILE = ARTIFACTS / "best_params_p02.json"
 
 
 def load_best_params(params_file: Path) -> dict:
-    if not params_file.exists():
+    # Try JSON file first
+    if params_file.exists():
+        params = json.loads(params_file.read_text())
+        if "catboost" in params:
+            return params["catboost"]
+        log.warning("'catboost' key missing in %s — falling back to Optuna DB", params_file)
+
+    # Fall back to Optuna SQLite DB
+    db_path = ARTIFACTS / "optuna_p02.db"
+    if not db_path.exists():
         raise FileNotFoundError(
-            f"{params_file} not found. Run Pipeline 2 first (run_pipelines.py --only 2)."
+            f"Neither {params_file} nor {db_path} found. Run Pipeline 2 first."
         )
-    params = json.loads(params_file.read_text())
-    if "catboost" not in params:
-        raise KeyError(f"'catboost' key not found in {params_file}. Keys: {list(params)}")
-    return params["catboost"]
+    import optuna
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    study = optuna.load_study(
+        study_name="p02_catboost",
+        storage=f"sqlite:///{db_path}",
+    )
+    log.info("Loaded CatBoost study from DB: %d trials, best value=%.4f",
+             len(study.trials), study.best_value)
+    return study.best_params
 
 
 def main(params_file: Path = DEFAULT_PARAMS_FILE) -> None:
@@ -47,6 +61,12 @@ def main(params_file: Path = DEFAULT_PARAMS_FILE) -> None:
     log.info("Dataset: %d samples, %d features", X.shape[0], X.shape[1])
     unique, counts = np.unique(y, return_counts=True)
     log.info("Class distribution: %s", dict(zip(unique.tolist(), counts.tolist())))
+
+    # Remove params that are set explicitly to avoid duplicates
+    cat_params.pop("loss_function", None)
+    cat_params.pop("task_type", None)
+    cat_params.pop("random_seed", None)
+    cat_params.pop("eval_metric", None)
 
     model = CatBoostClassifier(
         loss_function="MultiClass",

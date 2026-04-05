@@ -18,29 +18,29 @@ def apply_zero_gen_gate(df: pd.DataFrame) -> pd.DataFrame:
 
     if "has_failed_but_no_successful_payment" in df.columns:
         mask = (
-            (df["has_failed_but_no_successful_payment"] == 1)
-            & (df.get("is_likely_free_tier_user", 0) == 0)
+                (df["has_failed_but_no_successful_payment"] == 1)
+                & (df.get("is_likely_free_tier_user", 0) == 0)
         )
         df.loc[mask, "final_label"] = "invol_churn"
     return df
 
 
 def predict_churn(
-    user_df: pd.DataFrame,
-    s1_model,
-    s2_model,
-    threshold_s1: float = 0.30,
+        user_df: pd.DataFrame,
+        s1_model,
+        s2_model,
+        threshold_s1: float = 0.30,
 ) -> pd.DataFrame:
     """
     Two-stage batch inference.
-    Creates a dedicated output dataframe with only 2 columns.
+    Creates a dedicated output dataframe with only user_id and predicted_status.
     """
     # 1. Logic processing (internal temporary df)
     df = apply_zero_gen_gate(user_df)
     needs_model = df["final_label"].isna()
 
     s1_feat = safe_features(df, S1_FEATURES)
-    t_feat  = safe_features(df, T_FEATURES)
+    t_feat = safe_features(df, T_FEATURES)
 
     if needs_model.sum() > 0:
         probs_s1 = s1_model.predict_proba(df.loc[needs_model, s1_feat])[:, 1]
@@ -55,9 +55,13 @@ def predict_churn(
         )
 
     # 2. CREATE ADDITIONAL DATA FRAME (The Clean Version)
-    output_df = pd.DataFrame({
-        "user_id": df.index,
-        "predicted_status": df["final_label"].values
-    })
+    # Keep only the very first column (index 0, assumed to be user IDs)
+    output_df = df.iloc[:, [0]].copy()
+
+    # Add your calculated predictions as the second column
+    output_df["predicted_status"] = df["final_label"]
+
+    # Rename the columns to exactly what you requested
+    output_df.columns = ["user_id", "predicted_status"]
 
     return output_df

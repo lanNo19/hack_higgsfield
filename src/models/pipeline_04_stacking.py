@@ -114,7 +114,8 @@ def run() -> dict:
     hold_result = evaluate_proba(f"{NAME}_holdout", y_hold, hold_final)
     save_result(hold_result)
     np.save(ARTIFACTS / "oof_p04_holdout.npy", hold_final)
-    np.save(ARTIFACTS / "oof_p04_meta_tv.npy", oof_meta)    # L1 meta-features for P10
+    np.save(ARTIFACTS / "oof_p04_meta_tv.npy", oof_meta)      # L1 meta-features for P10
+    np.save(ARTIFACTS / "oof_p04_meta_hold.npy", test_meta)   # L1 holdout meta-features for P10
 
     return hold_result
 

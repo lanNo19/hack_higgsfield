@@ -153,22 +153,13 @@ def run() -> dict:
 
     final_model = _train_mlp(X_m_tr, y_m_tr, X_m_val, y_m_val, epochs=300)
 
-    # Holdout meta-features: load P04's held-out L1 stack
-    # P04 saves oof_p04_holdout.npy which is the L2 output, not L1.
-    # We approximate by using all base learner holdout probas concatenated.
-    # Collect from saved per-model holdout predictions.
-    model_names = ["lgbm", "xgb", "catboost", "rf", "et"]
-    hold_parts = []
-    for mn in model_names:
-        p = ARTIFACTS / f"oof_p02_{mn}_holdout.npy"
-        if p.exists():
-            hold_parts.append(np.load(p))
-
-    if len(hold_parts) == 5:
-        hold_meta = np.concatenate(hold_parts, axis=1)
-    else:
-        log.warning("Not all base learner holdout probas found. Skipping holdout eval.")
+    # Holdout meta-features: load P04's L1 holdout stack (saved by P04 as oof_p04_meta_hold.npy)
+    meta_hold_path = ARTIFACTS / "oof_p04_meta_hold.npy"
+    if not meta_hold_path.exists():
+        log.warning("oof_p04_meta_hold.npy not found. Skipping holdout eval.")
         return cv_result
+
+    hold_meta = np.load(meta_hold_path)
 
     hold_meta_scaled = scaler.transform(hold_meta)
     hold_proba = _predict_mlp(final_model, hold_meta_scaled)

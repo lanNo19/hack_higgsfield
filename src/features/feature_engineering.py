@@ -440,7 +440,7 @@ def build_generation_features(gens: pd.DataFrame, ref_date: pd.Timestamp) -> pd.
         agg = agg.merge(res_pivot, on="user_id", how="left")
 
     # ---- Aspect ratio distribution ----
-    ar_col = [c for c in g.columns if "aspect" in c.lower() or "ration" in c.lower()]
+    ar_col = [c for c in g.columns if "aspect" in c.lower() or "ratio" in c.lower()]
     if ar_col:
         ar_name = ar_col[0]
         ar_pivot = g.groupby(["user_id", ar_name]).size().unstack(fill_value=0)

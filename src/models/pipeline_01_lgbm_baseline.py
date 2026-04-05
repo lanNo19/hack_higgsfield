@@ -79,7 +79,6 @@ def run() -> dict:
     save_oof("p01", oof_tv)
 
     # Persist holdout labels/proba for downstream pipelines
-    import numpy as np
     from src.models.pipeline_utils import ARTIFACTS
     np.save(ARTIFACTS / "y_holdout.npy", y_hold)
     np.save(ARTIFACTS / "oof_p01_holdout.npy", hold_proba)

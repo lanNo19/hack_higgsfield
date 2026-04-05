@@ -181,8 +181,8 @@ INTERVENTION_MAP = {
     # Involuntary churn interventions
     "billing_failure": {
         "features": ["txn_failure_rate", "n_failed_txn", "max_fail_streak",
-                      "last_txn_failed", "all_failed", "has_any_failure",
-                      "n_fail_card_declined", "engaged_but_failing_pay"],
+                     "last_txn_failed", "all_failed", "has_any_failure",
+                     "n_fail_card_declined", "engaged_but_failing_pay"],
         "label": "Payment Recovery",
         "action": "Implement smart retry logic with exponential backoff. "
                   "Send pre-dunning email 3 days before expected charge. "
@@ -190,8 +190,8 @@ INTERVENTION_MAP = {
     },
     "card_issues": {
         "features": ["n_fail_expired_card", "n_fail_incorrect_cvc", "n_fail_invalid_cvc",
-                      "n_fail_incorrect_number", "any_prepaid", "any_virtual",
-                      "multiple_cards_used", "n_unique_cards"],
+                     "n_fail_incorrect_number", "any_prepaid", "any_virtual",
+                     "multiple_cards_used", "n_unique_cards"],
         "label": "Card Update Campaign",
         "action": "Trigger card update reminder when expiry approaches. "
                   "Enable account updater service for automatic card refresh. "
@@ -199,7 +199,7 @@ INTERVENTION_MAP = {
     },
     "3ds_friction": {
         "features": ["_3ds_fail_count", "any_3ds_required", "n_3ds_attempted",
-                      "country_mismatch_rate"],
+                     "country_mismatch_rate"],
         "label": "Authentication Friction Reduction",
         "action": "Optimize 3D Secure flow (request exemptions where possible). "
                   "Ensure billing country matches card country. "
@@ -208,8 +208,8 @@ INTERVENTION_MAP = {
     # Voluntary churn interventions
     "engagement_decay": {
         "features": ["days_since_last_gen", "gen_frequency_per_day", "gen_gap_trend",
-                      "gen_engagement_trend", "total_generations", "paying_but_not_using",
-                      "mean_intergen_hours", "max_intergen_hours"],
+                     "gen_engagement_trend", "total_generations", "paying_but_not_using",
+                     "mean_intergen_hours", "max_intergen_hours"],
         "label": "Re-engagement Campaign",
         "action": "Send personalized 'what's new' email with new model/feature highlights. "
                   "Offer free credits to restart generation activity. "
@@ -217,7 +217,7 @@ INTERVENTION_MAP = {
     },
     "value_perception": {
         "features": ["frust_is_cost", "overpaying_for_tier", "cost_frustrated_high_spender",
-                      "plan_tier", "is_top_tier_plan", "expert_on_basic"],
+                     "plan_tier", "is_top_tier_plan", "expert_on_basic"],
         "label": "Value Optimization",
         "action": "For overpaying users: suggest downgrade to right-sized plan (retain > lose). "
                   "For cost-frustrated users: offer limited-time discount or annual plan savings. "
@@ -225,7 +225,7 @@ INTERVENTION_MAP = {
     },
     "onboarding_gap": {
         "features": ["quiz_empty", "quiz_completion_score", "good_onboarding_low_use",
-                      "is_beginner", "frust_is_hard_prompt"],
+                     "is_beginner", "frust_is_hard_prompt"],
         "label": "Onboarding Improvement",
         "action": "Trigger guided tutorial sequence for users with incomplete onboarding. "
                   "Provide prompt templates for beginners struggling with prompt engineering. "
@@ -233,7 +233,7 @@ INTERVENTION_MAP = {
     },
     "low_adoption": {
         "features": ["n_unique_gen_types", "gen_type_entropy", "has_credits_purchase",
-                      "has_upsell", "total_credits_spent"],
+                     "has_upsell", "total_credits_spent"],
         "label": "Feature Adoption Drive",
         "action": "Send targeted feature discovery emails based on unused capabilities. "
                   "Offer credit bundles for trying new generation models. "
@@ -243,6 +243,18 @@ INTERVENTION_MAP = {
 
 CLASS_NAMES = {0: "not_churned", 1: "vol_churn", 2: "invol_churn"}
 CLASS_COLORS = {0: "#2ecc71", 1: "#e74c3c", 2: "#f39c12"}
+
+# Which intervention clusters belong to which churn class
+# 1 = vol_churn, 2 = invol_churn
+CLUSTER_CLASS_MAP = {
+    "billing_failure":  2,
+    "card_issues":      2,
+    "3ds_friction":     2,
+    "engagement_decay": 1,
+    "value_perception": 1,
+    "onboarding_gap":   1,
+    "low_adoption":     1,
+}
 
 
 # =====================================================================
@@ -369,7 +381,7 @@ def plot_global_bar_comparison(shap_values, X, out_dir, top_n=15):
 # =====================================================================
 
 def explain_user(
-    shap_values, X, user_idx, predicted_class, out_dir, explainer, tag=""
+        shap_values, X, user_idx, predicted_class, out_dir, explainer, tag=""
 ):
     """Generate waterfall plot + text explanation for one user."""
     cls_idx = predicted_class
@@ -411,8 +423,8 @@ def explain_user(
             f"(SHAP: {contribution:+.4f})"
         )
 
-    # Map to intervention
-    intervention = map_to_intervention(top_feat_idx, X.columns)
+    # Map to intervention — pass cls_idx so only class-appropriate clusters are considered
+    intervention = map_to_intervention(top_feat_idx, X.columns, cls_idx)
     if intervention:
         lines.append(f"\n  Recommended intervention: {intervention['label']}")
         lines.append(f"  Action: {intervention['action']}")
@@ -426,25 +438,41 @@ def explain_user(
     return explanation_text
 
 
-def map_to_intervention(top_feat_indices, columns):
-    """Map top SHAP features to the best-matching intervention cluster."""
+def map_to_intervention(top_feat_indices, columns, predicted_class: int):
+    """Map top SHAP features to the best-matching intervention cluster.
+
+    Only considers clusters that belong to the predicted churn type
+    (invol clusters for class 2, vol clusters for class 1), preventing
+    payment-recovery interventions from being assigned to vol_churn users
+    and vice versa.
+    """
     top_feats = set(columns[i] for i in top_feat_indices)
     best_match = None
     best_overlap = 0
     for cluster_key, cluster in INTERVENTION_MAP.items():
+        if CLUSTER_CLASS_MAP.get(cluster_key) != predicted_class:
+            continue
         overlap = len(top_feats & set(cluster["features"]))
         if overlap > best_overlap:
             best_overlap = overlap
             best_match = cluster
+    # Fallback: no feature overlap found — return first cluster for this class
+    if best_match is None:
+        for cluster_key, cluster in INTERVENTION_MAP.items():
+            if CLUSTER_CLASS_MAP.get(cluster_key) == predicted_class:
+                return cluster
     return best_match
 
 
 def select_example_users(shap_values, y, predicted_probs, n_per_class=2):
-    """Select high-confidence example users for each churn type."""
+    """Select high-confidence example users for vol_churn and invol_churn only.
+
+    not_churned users are excluded — there is no intervention to recommend
+    for retained users and they add noise to the presentation output.
+    """
     examples = {}
-    for cls_idx in [1, 2]:  # vol_churn, invol_churn
+    for cls_idx in [1, 2]:  # vol_churn, invol_churn only
         cls_name = CLASS_NAMES[cls_idx]
-        # Users truly in this class with high predicted probability
         mask = y == cls_idx
         if mask.sum() == 0:
             continue
@@ -452,14 +480,6 @@ def select_example_users(shap_values, y, predicted_probs, n_per_class=2):
         local_indices = np.where(mask)[0]
         top_local = np.argsort(probs_for_class)[-n_per_class:][::-1]
         examples[cls_name] = local_indices[top_local]
-
-    # Also include a clear not_churned example
-    mask_nc = y == 0
-    if mask_nc.sum() > 0:
-        probs_nc = predicted_probs[mask_nc, 0]
-        local_nc = np.where(mask_nc)[0]
-        top_nc = np.argsort(probs_nc)[-1:][::-1]
-        examples["not_churned"] = local_nc[top_nc]
 
     return examples
 
@@ -576,11 +596,11 @@ def plot_churn_risk_distribution(predicted_probs, y, out_dir):
 # =====================================================================
 
 def run_explainability(
-    model,
-    X: pd.DataFrame,
-    y: np.ndarray,
-    predicted_probs: np.ndarray | None = None,
-    out_dir: Path = Path("./explainability_output"),
+        model,
+        X: pd.DataFrame,
+        y: np.ndarray,
+        predicted_probs: np.ndarray | None = None,
+        out_dir: Path = Path("./explainability_output"),
 ):
     """
     Full explainability pipeline.
@@ -624,7 +644,11 @@ def run_explainability(
 
     for cls_name, indices in examples.items():
         for rank, idx in enumerate(indices):
-            cls_idx = int(y[idx])
+            # Use predicted class for SHAP explanation, not the true label.
+            # Explaining against the true class when the model disagrees produces
+            # near-zero SHAP values because the model's uncertainty is spread
+            # across classes — we want to explain what the model actually decided.
+            cls_idx = int(np.argmax(predicted_probs[idx]))
             tag = f"{cls_name}_example{rank+1}"
             explanation = explain_user(
                 shap_values, X, idx, cls_idx, out_dir, explainer, tag=tag

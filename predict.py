@@ -1,97 +1,67 @@
-"""Generate predictions on the test set using the trained CatBoost model.
-
-Loads: models/trained/catboost_final.cbm
-Input: data/processed/features_test.parquet
-Output: predictions/predictions.csv  (user_id, churn_status, p_not_churned, p_vol_churn, p_invol_churn)
-
-Usage:
-    uv run python predict.py
-    uv run python predict.py --model models/trained/catboost_final.cbm --out predictions/predictions.csv
-"""
+"""Batch inference: apply trained Stage 1 + Stage 2 models to new users."""
 from __future__ import annotations
-
-import argparse
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from catboost import CatBoostClassifier
 
-from src.utils.helpers import processed_path, root_path
-from src.utils.logger import get_logger
-
-log = get_logger(__name__)
-
-CLASS_NAMES = ["not_churned", "vol_churn", "invol_churn"]
-DEFAULT_MODEL = root_path() / "models" / "trained" / "catboost_final.cbm"
-DEFAULT_OUT = root_path() / "predictions" / "predictions.csv"
+from src.models.train import S1_FEATURES, T_FEATURES, safe_features
 
 
-def load_test_features() -> tuple[pd.DataFrame, pd.Series | None]:
-    path = processed_path() / "features_test.parquet"
-    if not path.exists():
-        raise FileNotFoundError(
-            f"{path} not found. Run: uv run python -m src.features.feature_engineering --mode test"
+def apply_zero_gen_gate(df: pd.DataFrame) -> pd.DataFrame:
+    """Hard-rule pre-filter applied before any model scoring."""
+    df = df.copy()
+    if "final_label" not in df.columns:
+        df["final_label"] = np.nan
+
+    if "is_likely_free_tier_user" in df.columns:
+        df.loc[df["is_likely_free_tier_user"] == 1, "final_label"] = "not_churned"
+
+    if "has_failed_but_no_successful_payment" in df.columns:
+        mask = (
+                (df["has_failed_but_no_successful_payment"] == 1)
+                & (df.get("is_likely_free_tier_user", 0) == 0)
         )
-    df = pd.read_parquet(path)
-    log.info("Loaded test features: %d samples, %d columns", df.shape[0], df.shape[1])
+        df.loc[mask, "final_label"] = "invol_churn"
 
-    user_ids = df["user_id"] if "user_id" in df.columns else None
-    X = df.drop(columns=["user_id", "churn_status"], errors="ignore")
-    return X, user_ids
+    return df
 
 
-def main(model_path: Path = DEFAULT_MODEL, out_path: Path = DEFAULT_OUT) -> None:
-    if not model_path.exists():
-        raise FileNotFoundError(
-            f"Model not found at {model_path}. Run: uv run python train_final_model.py"
+def predict_churn(
+        user_df: pd.DataFrame,
+        s1_model,
+        s2_model,
+        threshold_s1: float = 0.30,
+) -> pd.DataFrame:
+    """
+    Returns ONLY user_id and predicted_status.
+    """
+    # 1. Setup working copy
+    df = apply_zero_gen_gate(user_df)
+    needs_model = df["final_label"].isna()
+
+    s1_feat = safe_features(df, S1_FEATURES)
+    t_feat = safe_features(df, T_FEATURES)
+
+    # 2. Run Stage 1 (needed for logic, but probs won't be in final output)
+    if needs_model.sum() > 0:
+        probs_s1 = s1_model.predict_proba(df.loc[needs_model, s1_feat])[:, 1]
+        df.loc[needs_model, "temp_probs"] = probs_s1
+
+        not_churn_mask = needs_model & (df["temp_probs"] < threshold_s1)
+        df.loc[not_churn_mask, "final_label"] = "not_churned"
+
+    # 3. Run Stage 2
+    churn_idx = needs_model & (df["temp_probs"].fillna(0) >= threshold_s1)
+    if churn_idx.sum() > 0:
+        probs_s2 = s2_model.predict_proba(df.loc[churn_idx, t_feat])[:, 1]
+        df.loc[churn_idx, "final_label"] = np.where(
+            probs_s2 >= 0.5, "invol_churn", "vol_churn"
         )
 
-    log.info("Loading model from %s", model_path)
-    model = CatBoostClassifier()
-    model.load_model(str(model_path))
+    # 4. THE CLEANUP: This part forces the 2-column output
+    # We reset the index to get 'user_id' as a column, then filter and rename.
+    df.index.name = "user_id"
+    final_output = df.reset_index()[["user_id", "final_label"]]
+    final_output = final_output.rename(columns={"final_label": "predicted_status"})
 
-    X, user_ids = load_test_features()
-
-    # Align features to what the model was trained on
-    train_features = model.feature_names_
-    if train_features is not None:
-        missing = [f for f in train_features if f not in X.columns]
-        extra = [f for f in X.columns if f not in train_features]
-        if missing:
-            log.warning("Filling %d missing features with 0: %s", len(missing), missing)
-            for f in missing:
-                X[f] = 0
-        if extra:
-            log.warning("Dropping %d extra features not seen during training", len(extra))
-        X = X[train_features]
-
-    log.info("Running inference on %d samples...", len(X))
-    proba = model.predict_proba(X)
-    pred_class_idx = np.argmax(proba, axis=1)
-    pred_labels = [CLASS_NAMES[i] for i in pred_class_idx]
-
-    out = pd.DataFrame({
-        "predicted_churn_status": pred_labels,
-        "p_not_churned": proba[:, 0],
-        "p_vol_churn":   proba[:, 1],
-        "p_invol_churn": proba[:, 2],
-    })
-    if user_ids is not None:
-        out.insert(0, "user_id", user_ids.values)
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out.to_csv(out_path, index=False)
-    log.info("Predictions saved → %s  (%d rows)", out_path, len(out))
-
-    # Summary
-    counts = out["predicted_churn_status"].value_counts()
-    log.info("Prediction distribution:\n%s", counts.to_string())
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=Path, default=DEFAULT_MODEL)
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    args = parser.parse_args()
-    main(model_path=args.model, out_path=args.out)
+    return final_output

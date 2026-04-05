@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import joblib  # <-- Added to load your trained models
+import joblib
 from pathlib import Path
 
 from src.models.train import S1_FEATURES, T_FEATURES, safe_features
@@ -36,7 +36,7 @@ def predict_churn(
     """
     Two-stage batch inference.
     Creates a dedicated output dataframe with only user_id and predicted_status,
-    and saves it to prediction.csv in the same folder as this script.
+    and saves it to predictions/predictions.csv.
     """
     # 1. Logic processing (internal temporary df)
     df = apply_zero_gen_gate(user_df)
@@ -62,10 +62,14 @@ def predict_churn(
     output_df["predicted_status"] = df["final_label"]
     output_df.columns = ["user_id", "predicted_status"]
 
-    # 3. SAVE THE RESULT TO THE SAME FOLDER AND PRINT THE PATH
+    # 3. SAVE THE RESULT TO SPECIFIED PATH
     current_dir = Path(__file__).parent
-    save_file = current_dir / "prediction.csv"
+    save_dir = current_dir / "predictions"
 
+    # Create the 'predictions' directory if it doesn't exist
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    save_file = save_dir / "predictions.csv"
     output_df.to_csv(save_file, index=False)
 
     print(f"Predictions saved successfully to: {save_file.resolve()}")
@@ -77,20 +81,18 @@ def predict_churn(
 # EXECUTION BLOCK
 # ==========================================
 if __name__ == "__main__":
-    # Get the root directory where predict.py lives
     root_dir = Path(__file__).parent
 
-    # ---------------------------------------------------------
-    # YOU MUST UPDATE THESE 3 PATHS TO MATCH YOUR ACTUAL FILES
-    # ---------------------------------------------------------
-    # For example, if your data is inside a 'data' folder: root_dir / "data" / "users.csv"
-    data_path = root_dir / "YOUR_DATA_FILE.csv"
+    # Pointing to the specific input file you requested
+    data_path = root_dir / "data" / "processed" / "labels_train.parquet"
+
+    # YOU STILL NEED TO UPDATE THESE TO YOUR ACTUAL MODEL FILES!
     s1_model_path = root_dir / "YOUR_STAGE_1_MODEL.pkl"
     s2_model_path = root_dir / "YOUR_STAGE_2_MODEL.pkl"
 
     try:
-        print("Loading user data...")
-        user_data = pd.read_csv(data_path)
+        print(f"Loading user data from {data_path}...")
+        user_data = pd.read_parquet(data_path)
 
         print("Loading models...")
         s1 = joblib.load(s1_model_path)
@@ -101,6 +103,6 @@ if __name__ == "__main__":
 
     except FileNotFoundError as e:
         print(f"\n[ERROR] File not found: {e.filename}")
-        print("Please edit the EXECUTION BLOCK at the bottom of predict.py to point to your actual file names.")
+        print("Please ensure your paths are correct (especially the model files).")
     except Exception as e:
         print(f"\n[ERROR] An unexpected error occurred: {e}")

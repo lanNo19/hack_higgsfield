@@ -40,6 +40,7 @@ def _train_tabnet(X_tr, y_tr, X_val, y_val) -> object:
         scheduler_params={"step_size": 50, "gamma": 0.9},
         scheduler_fn=__import__("torch").optim.lr_scheduler.StepLR,
         mask_type="sparsemax",
+        device_name="cpu",  # RTX 5090 (sm_120) not supported by current PyTorch build
         verbose=0,
         seed=42,
     )

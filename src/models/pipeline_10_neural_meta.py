@@ -23,7 +23,7 @@ from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 NAME = "P10_neural_meta"
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cpu"  # RTX 5090 (sm_120) not supported by current PyTorch build
 
 
 # ── MLP Architecture ──────────────────────────────────────────────────────────
